@@ -16,9 +16,9 @@
   (parameterize ([sandbox-output #f]
                  [sandbox-error-output 'string]
                  [sandbox-propagate-exceptions #f])
-    (let ([evaluator (make-evaluator 'racket)])
-      (evaluator `(define message-contents ,text))
-      evaluator)))
+    (make-evaluator
+     'racket
+     `(define message-contents ,text))))
 
 (define (run code text)
   (let* ((evaluator (init-evaluator text))
