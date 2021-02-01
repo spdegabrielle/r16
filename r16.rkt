@@ -13,7 +13,10 @@
        (not (null? (rc:user-bot (rc:message-author message))))))
 
 (define (strip-backticks code)
-  (string-trim code "`" #:repeat? #t))
+  (let ([groups (regexp-match #px"```(\\w+\n)?(.+)```" code)])
+    (if groups
+        (caddr groups)
+        code)))
 
 (define (run-snippet client message code)
   (let ([code (strip-backticks code)]
