@@ -1,3 +1,4 @@
+#!/bin/racket
 #lang racket
 
 (require (prefix-in rc: racket-cord))
