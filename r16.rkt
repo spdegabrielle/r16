@@ -1,4 +1,4 @@
-#!/bin/racket
+#!/usr/bin/env racket
 #lang racket
 
 (require (prefix-in rc: racket-cord))
