@@ -4,6 +4,7 @@
 (require (prefix-in rc: racket-cord))
 (require (prefix-in http: racket-cord/http))
 (require (prefix-in ev: "evaluator.rkt"))
+(require (prefix-in db: "trick-db.rkt"))
 
 (define (strip-trim msg prefix)
   (string-trim (substring msg (string-length prefix))))
@@ -11,6 +12,12 @@
 (define (message-from-bot? message)
   (and (not (null? (rc:message-author message)))
        (not (null? (rc:user-bot (rc:message-author message))))))
+
+(define ((contextualizer client) message)
+  (let ((channel (http:get-channel client (rc:message-channel-id message))))
+    (and (rc:guild-channel? channel) (rc:guild-channel-guild-id channel))))
+
+(define (make-db client filename) (db:make-trickdb (contextualizer client) filename))
 
 (define (strip-backticks code)
   (let ([groups (regexp-match #px"```(\\w+\n)?(.+)```" code)])
