@@ -18,7 +18,7 @@
                  [sandbox-propagate-exceptions #f])
     (make-evaluator
      'racket
-     `(define message-contents ,text))))
+     `(define message-contents ',text))))
 
 (define (run code text)
   (let* ((evaluator (init-evaluator text))
