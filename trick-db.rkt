@@ -6,12 +6,12 @@
 
 (define trick-key? string?)
 ; A contextualizer is a function mapping a message to a context key (e.g. guild ID)
-(define contextualizer? (-> message? (or/c string? #f)))
+(define contextualizer? (-> message? any))
 
 (provide
   (contract-out
     (saveable-trick? (-> any/c boolean?))
-    (make-trickdb (-> path-string? contextualizer? trickdb?))
+    (make-trickdb (-> contextualizer? path-string? trickdb?))
     (get-trick-context (-> trickdb? message? (or/c trick-context? #f)))
     (list-tricks (-> trick-context? (listof trick-key?)))
     (get-trick (-> trick-context? trick-key? (or/c saveable-trick? #f)))
@@ -37,7 +37,7 @@
       (deserialize data))))
 
 (define (try-read-db db filename default)
-  (with-handlers ([exn:fail? (lambda (e) (displayln e current-error-port) (default))])
+  (with-handlers ([exn:fail? (lambda (e) (displayln e (current-error-port)) (default))])
     (deserialize-db db (read (open-input-file filename)))))
 
 (define (make-trickdb contextualizer filename)

@@ -2,9 +2,15 @@
 #lang racket
 
 (require (prefix-in rc: racket-cord))
+(require (prefix-in sz: racket/serialize))
 (require (prefix-in http: racket-cord/http))
 (require (prefix-in ev: "evaluator.rkt"))
 (require (prefix-in db: "trick-db.rkt"))
+
+; williewillus#8490, maintainer, & Vazkii#0999, whose server we hope to run this in
+(define bot-admins '("132691314784337920" "156785583723642881"))
+
+(define prefix "!rkt") 
 
 (define (strip-trim msg prefix)
   (string-trim (substring msg (string-length prefix))))
@@ -13,11 +19,28 @@
   (and (not (null? (rc:message-author message)))
        (not (null? (rc:user-bot (rc:message-author message))))))
 
+#|
 (define ((contextualizer client) message)
-  (let ((channel (http:get-channel client (rc:message-channel-id message))))
+  (let ([channel (http:get-channel client (rc:message-channel-id message))])
     (and (rc:guild-channel? channel) (rc:guild-channel-guild-id channel))))
+|#
+(define ((contextualizer client) message)
+  'vazcord-lmao)
 
 (define (make-db client filename) (db:make-trickdb (contextualizer client) filename))
+
+(define message-author-id (compose1 rc:user-id rc:message-author))
+
+(sz:serializable-struct trick (author body created))
+
+(define (can-modify? trick message)
+  (let ([author-id (message-author-id message)])
+    (or
+      (equal? (trick-author trick) author-id)
+      ; TODO: Put a check here for Administrator/Manage Members:
+      ; Use HTTP to turn message to channel to guild obj, search author ID to get member
+      ; Then iter owned roles and lookup in guild to bit-check perms
+      (member author-id bot-admins))))
 
 (define (strip-backticks code)
   (let ([groups (regexp-match #px"```(\\w+\n)?(.+)```" code)])
@@ -25,47 +48,86 @@
         (caddr groups)
         code)))
 
-(define (run-snippet client message code)
+(define (codeblock-quote result)
+  (~a "```scheme\n" result "```"))
+
+(define (split-once str)
+  (let ([index (ormap (lambda (n) (and (char-whitespace? (string-ref str n)) n)) (range (string-length str)))])
+    (if index
+      (values (substring str 0 index) (string-trim (substring str index)))
+      (values str #f))))
+
+(define-syntax-rule (check-trick-prereqs db message text context-out name-out body-out body)
+  (let ([context-out (db:get-trick-context db message)])
+    (if context-out
+      (let-values ([(name-out body-out) (split-once text)])
+        (if (non-empty-string? name-out)
+          body
+          (~a "Missing the name for the trick!")))
+      (~a "Cannot run tricks for this type of message!"))))
+
+(define (make-trick body message) (trick (message-author-id message) (strip-backticks body) (rc:message-timestamp message)))
+
+(define (run-snippet client _ message code)
   (let ([code (strip-backticks code)]
         [text (rc:message-content message)])
-    (ev:run code text)))
+    (ev:run code text '())))
         
-(define (register-trick client message rst)
-  (~a "Registering " message))
+(define (register-trick client db message text)
+  (check-trick-prereqs
+    db message text
+    context name body
+    (cond
+      [(not body) (~a "Trick " name " needs a body!")]
+      [(db:add-trick! context name (thunk (make-trick body message)))
+        (~a "Successfully registered trick " name "!")]
+      [else (~a "Trick " name " already exists!")])))
 
-(define (call-trick client message name)
-  (~a "Calling " name))
+(define (call-trick client db message text)
+  (check-trick-prereqs
+    db message text
+    context name body
+    (let ([trick (db:get-trick context name)])
+      (if trick
+        (codeblock-quote (ev:run (trick-body trick) (rc:message-content message) (if body (string-split body) '())))
+        (~a "Trick " name " doesn't exist!")))))
 
-(define (show-trick client message name)
-  (~a "Showing " name))
+(define (show-trick client db message text)
+  (check-trick-prereqs
+    db message text
+    context name _
+    (let ([trick (db:get-trick context name)])
+      (if trick
+        (codeblock-quote (trick-body trick))
+        (~a "Trick " name " doesn't exist!")))))
 
 (define command-table (list (cons "eval" run-snippet)
                             (cons "register" register-trick)
                             (cons "call" call-trick)
                             (cons "show" show-trick)))
 
-(define (dispatch-command client message text)
+(define (dispatch-command client db message text)
   (ormap (lambda (pair)
            (let ([cmdname (car pair)]
                  [func (cdr pair)])
              (and (string-prefix? text cmdname)
-                  (func client message (strip-trim text cmdname)))))
+                  (func client db message (strip-trim text cmdname)))))
          command-table))
 
-(define prefix "!rkt") 
-
-(define (message-received client message)
+(define ((message-received db) client message)
   (let ([content (string-trim (rc:message-content message))]
         [channel (rc:message-channel-id message)])
     (if (and (not (message-from-bot? message))
              (string-prefix? content prefix))
-        (let ([response (dispatch-command client message (strip-trim (rc:message-content message) prefix))])
+        (let ([response (dispatch-command client db message (strip-trim (rc:message-content message) prefix))])
           (http:create-message client channel response))
         #f)))
 
 (define (init-client token)
-  (let ([client (rc:make-client token #:auto-shard #t)])
-    (rc:on-event 'message-create client message-received)
+  (let* ([client (rc:make-client token #:auto-shard #t)]
+         [db     (make-db client "tricks.rktd")])
+    (thread (thunk (sleep 60) (db:commit-db! db)))
+    (rc:on-event 'message-create client (message-received db))
     client))
 
 (define (main)
