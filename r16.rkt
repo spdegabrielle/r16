@@ -19,13 +19,9 @@
   (and (not (null? (rc:message-author message)))
        (not (null? (rc:user-bot (rc:message-author message))))))
 
-#|
 (define ((contextualizer client) message)
   (let ([channel (http:get-channel client (rc:message-channel-id message))])
     (and (rc:guild-channel? channel) (rc:guild-channel-guild-id channel))))
-|#
-(define ((contextualizer client) message)
-  'vazcord-lmao)
 
 (define (make-db client filename) (db:make-trickdb (contextualizer client) filename))
 
@@ -52,7 +48,7 @@
   (~a "```scheme\n" result "```"))
 
 (define (split-once str)
-  (let ([index (ormap (lambda (n) (and (char-whitespace? (string-ref str n)) n)) (range (string-length str)))])
+  (let ([index (index-where (string->list str) char-whitespace?)])
     (if index
       (values (substring str 0 index) (string-trim (substring str index)))
       (values str #f))))
@@ -113,15 +109,15 @@
         (codeblock-quote (trick-body trick))
         (~a "Trick " name " doesn't exist!")))))
 
-(define command-table (list (cons "eval" run-snippet)
-                            (cons "register" register-trick)
-                            (cons "call" call-trick)
-                            (cons "show" show-trick)))
+(define command-table
+  `(("eval"     . ,run-snippet)
+    ("register" . ,register-trick)
+    ("call"     . ,call-trick)
+    ("show"     . ,show-trick)))
 
 (define (dispatch-command client db message text)
   (ormap (lambda (pair)
-           (let ([cmdname (car pair)]
-                 [func (cdr pair)])
+           (match-let ([(cons cmdname func) pair])
              (and (string-prefix? text cmdname)
                   (func client db message (strip-trim text cmdname)))))
          command-table))
