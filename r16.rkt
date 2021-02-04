@@ -11,7 +11,7 @@
 ; williewillus#8490, maintainer, & Vazkii#0999, whose server we hope to run this in
 (define bot-admins '("132691314784337920" "156785583723642881"))
 
-(define prefix "!rkt") 
+(define prefix "!rkt ")
 
 (define (strip-trim msg prefix)
   (string-trim (substring msg (string-length prefix))))
@@ -75,7 +75,7 @@
   (let ([code (strip-backticks code)]
         [text (rc:message-content message)])
     (ev:run code (evaluation-ctx client message '()))))
-        
+
 (define (register-trick client db message text)
   (check-trick-prereqs
     db message text
@@ -107,27 +107,37 @@
     context name _
     (let ([trick (db:get-trick context name)])
       (if trick
-        (codeblock-quote (trick-body trick))
+        (~a
+          "Source for trick **"
+          name
+          "**, created by "
+          (get-user-tag (trick-author trick))
+          ":\n"
+          (codeblock-quote (trick-body trick)))
         (~a "Trick " name " doesn't exist!")))))
 
 (define help
-  (string-join
-   '("R16 -- A Racket Trick Bot for Discord"
-     "Brought to you by williewillus, Alwinfy, and Eutro"
-     ""
-     "Commands:"
-     "-  !rkt eval <code> => evaluate the rest of the message as a Racket form"
-     "-  !rkt register <name> <code> => register the given Racket form as a trick with the given name"
-     "-  !rkt call <name> ... => invoke the named trick, passing it the rest of the message as arguments. Arguments are parsed and split similar to POSIX shell."
-     "-  !rkt show <name> => show metadata and source for the named trick"
-     "-  !rkt help => show this message"
-     ""
-     "The following data is available in the trick environment:"
-     "-  all symbols from the `threading-lib` package => for utility purposes"
-     "-  message-contents => Full text of the invoking command, as a string"
-     "-  args => List of string arguments to the trick"
-     "-  delete-self => Function of zero arguments which, when called, will cause the bot to delete the message that invoked the trick.")
-   "\n"))
+  (string-replace
+    (string-join
+     '("R16 -- A Racket Trick Bot for Discord"
+       "Brought to you by williewillus, Alwinfy, and Eutro"
+       ""
+       "Commands:"
+       "-  PREFIXeval <code> => evaluate the rest of the message as a Racket form"
+       "-  PREFIXregister <name> <code> => register the given Racket form as a trick with the given name"
+       "-  PREFIXcall <name> ... => invoke the named trick, passing it the rest of the message as arguments; arguments are split shell-style"
+       "-  PREFIXshow <name> => show metadata and source for the named trick"
+       "-  PREFIXupdate <name> => change the source of the named trick; requires ownership or administrator"
+       "-  PREFIXdelete <name> => delete the named trick; requires ownership or administrator and cannot be undone!"
+       "-  PREFIXhelp => show this message"
+       ""
+       "The following data is available in the trick environment:"
+       "-  all symbols from the `threading-lib` package (for utility purposes)"
+       "-  message-contents => Full text of the invoking command, as a string"
+       "-  args => List of string arguments to the trick"
+       "-  delete-self => Thunk that removes the message that invoked the trick")
+     "\n")
+    "PREFIX" prefix))
 
 (define command-table
   `(("eval"     . ,run-snippet)
