@@ -30,7 +30,8 @@
                  [sandbox-propagate-exceptions #f])
     (make-evaluator
      'racket
-     (make-definition definitions))))
+     (make-definition definitions)
+     #:requires (list 'threading))))
 
 (define (run code definitions)
   (let* ((evaluator (init-evaluator definitions))

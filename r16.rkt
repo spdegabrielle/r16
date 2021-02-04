@@ -122,6 +122,7 @@
      "-  !rkt help => show this message"
      ""
      "The following data is available in the trick environment:"
+     "-  all symbols from the `threading-lib` package => for utility purposes"
      "-  message-contents => Full text of the invoking command, as a string"
      "-  args => List of string arguments to the trick"
      "-  delete-self => Function which, when called, deletes the user message that invoked the trick")
