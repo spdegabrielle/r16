@@ -12,6 +12,7 @@
 (define bot-admins '("132691314784337920" "156785583723642881"))
 
 (define prefix "!rkt ")
+(define trick-prefix "!!")
 
 (define (strip-trim msg prefix)
   (string-trim (substring msg (string-length prefix))))
@@ -173,21 +174,32 @@
     ("help"     . ,(thunk* help))
     ("show"     . ,show-trick)))
 
-(define (dispatch-command client db message text)
-  (ormap (lambda (pair)
-           (match-let ([(cons cmdname func) pair])
-             (and (string-prefix? text cmdname)
-                  (func client db message (strip-trim text cmdname)))))
-         command-table))
+(define (parse-prefix content)
+  (cond
+    ; If trick-prefix, return (call-trick rest)
+    [(string-prefix? content trick-prefix)
+     (cons call-trick (strip-trim content trick-prefix))]
+    ; If prefix, find the command or fall through
+    [(and
+       (string-prefix? content prefix)
+       (let ([content (strip-trim content prefix)])
+         (ormap
+           (lambda (pair)
+             (match-let ([(cons cmdname func) pair])
+               (and (string-prefix? content cmdname)
+                    (cons func (strip-trim content cmdname)))))
+           command-table)))]
+    ; Return falsey value for func
+    [else (cons #f content)]))
 
 (define ((message-received db) client message)
   (let ([content (string-trim (rc:message-content message))]
         [channel (rc:message-channel-id message)])
-    (if (and (not (message-from-bot? message))
-             (string-prefix? content prefix))
-        (let ([response (dispatch-command client db message (strip-trim (rc:message-content message) prefix))])
-          (http:create-message client channel response))
-        #f)))
+    (unless (message-from-bot? message)
+      (match-let ([(cons func content) (parse-prefix content)])
+        (when func
+          (let ([response (func client db message content)])
+            (http:create-message client channel response)))))))
 
 (define (init-client token)
   (let* ([client (rc:make-client token #:auto-shard #t)]
