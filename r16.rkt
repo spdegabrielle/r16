@@ -20,6 +20,13 @@
   (and (not (null? (rc:message-author message)))
        (not (null? (rc:user-bot (rc:message-author message))))))
 
+(define user-cache (make-hash))
+(define (get-user-tag client uid)
+  (hash-ref! user-cache uid
+    (thunk
+      (let ([user (http:get-user client uid)])
+        (format "~a#~a" (rc:user-username uid) (rc:user-discriminator uid))))))
+
 (define ((contextualizer client) message)
   (let ([channel (http:get-channel client (rc:message-channel-id message))])
     (and (rc:guild-channel? channel) (rc:guild-channel-guild-id channel))))
@@ -30,7 +37,7 @@
 
 (sz:serializable-struct trick (author body created))
 
-(define (can-modify? trick message)
+(define (can-modify? message trick)
   (let ([author-id (message-author-id message)])
     (or
       (equal? (trick-author trick) author-id)
@@ -101,6 +108,24 @@
               (if body (shlex:split body) '()))))
         (~a "Trick " name " doesn't exist!")))))
 
+(define (update-trick client db message text)
+  (check-trick-prereqs
+    db message text
+    context name body
+    (cond
+      [(not body) (~a "Trick " name " needs a body!")]
+      [(db:update-trick! context name (thunk (make-trick body message)) (curry can-modify? message))
+        (~a "Successfully updated trick " name "!")]
+      [else (~a "Trick " name " doesn't exist, or you can't modify it!")])))
+
+(define (delete-trick client db message text)
+  (check-trick-prereqs
+    db message text
+    context name body
+    (if (db:remove-trick! context name (thunk (make-trick body message)) (curry can-modify? message))
+      (~a "Successfully removed trick " name "!")
+      (~a "Trick " name " doesn't exist, or you can't remove it!"))))
+
 (define (show-trick client db message text)
   (check-trick-prereqs
     db message text
@@ -143,6 +168,8 @@
   `(("eval"     . ,run-snippet)
     ("register" . ,register-trick)
     ("call"     . ,call-trick)
+    ("update"   . ,update-trick)
+    ("delete"   . ,delete-trick)
     ("help"     . ,(thunk* help))
     ("show"     . ,show-trick)))
 

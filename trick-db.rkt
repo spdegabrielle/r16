@@ -7,6 +7,8 @@
 (define trick-key? string?)
 ; A contextualizer is a function mapping a message to a context key (e.g. guild ID)
 (define contextualizer? (-> message? any))
+; A permission check is a way to ensure a trick can be modified or removed.
+(define permission-check? (or/c (-> saveable-trick? boolean?) #f))
 
 (provide
   (contract-out
@@ -16,8 +18,8 @@
     (list-tricks (-> trick-context? (listof trick-key?)))
     (get-trick (-> trick-context? trick-key? (or/c saveable-trick? #f)))
     (add-trick! (-> trick-context? trick-key? (-> saveable-trick?) boolean?))
-    (update-trick! (-> trick-context? trick-key? (-> saveable-trick?) boolean?))
-    (remove-trick! (-> trick-context? trick-key? boolean?))
+    (update-trick! (-> trick-context? trick-key? (-> saveable-trick?) permission-check? boolean?))
+    (remove-trick! (-> trick-context? trick-key? permission-check? boolean?))
     (commit-db! (->* (trickdb?) ((or/c #f (-> exn? any/c))) boolean?))))
 
 (struct trickdb (data filename contextualizer (dirty #:mutable) lock))
@@ -85,19 +87,19 @@
         (hash-set! table name (thunk)))
       create)))
 
-(define (update-trick! context name thunk)
+(define (update-trick! context name thunk perm-check)
   (with-db-lock (trick-context-db context)
     (let* ((table  (trick-context-data context))
-           (modify (hash-has-key? table name)))
+           (modify (and (hash-has-key? table name) (perm-check (hash-ref table name)))))
       (when modify
         (mark-dirty context)
         (hash-set! table name (thunk)))
       modify)))
 
-(define (remove-trick! context name)
+(define (remove-trick! context name perm-check)
   (with-db-lock (trick-context-db context)
     (let* ((table  (trick-context-data context))
-           (remove (hash-has-key? table name)))
+           (remove (and (hash-has-key? table name) (perm-check (hash-ref table name)))))
       (when remove
         (mark-dirty context)
         (hash-remove! table name))
