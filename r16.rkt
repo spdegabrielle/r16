@@ -1,6 +1,7 @@
 #!/usr/bin/env racket
 #lang racket
 
+(require (prefix-in shlex: shlex))
 (require (prefix-in rc: racket-cord))
 (require (prefix-in sz: racket/serialize))
 (require (prefix-in http: racket-cord/http))
@@ -73,7 +74,7 @@
 (define (run-snippet client _ message code)
   (let ([code (strip-backticks code)]
         [text (rc:message-content message)])
-    (ev:run code text '())))
+    (ev:run code (evaluation-ctx client message '()))))
         
 (define (register-trick client db message text)
   (check-trick-prereqs
@@ -97,7 +98,7 @@
             (evaluation-ctx
               client
               message
-              (if body (string-split body) '()))))
+              (if body (shlex:split body) '()))))
         (~a "Trick " name " doesn't exist!")))))
 
 (define (show-trick client db message text)
@@ -125,7 +126,7 @@
      "-  all symbols from the `threading-lib` package => for utility purposes"
      "-  message-contents => Full text of the invoking command, as a string"
      "-  args => List of string arguments to the trick"
-     "-  delete-self => Function which, when called, deletes the user message that invoked the trick")
+     "-  delete-self => Function of zero arguments which, when called, will cause the bot to delete the message that invoked the trick.")
    "\n"))
 
 (define command-table
