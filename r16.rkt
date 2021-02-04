@@ -109,10 +109,29 @@
         (codeblock-quote (trick-body trick))
         (~a "Trick " name " doesn't exist!")))))
 
+(define help
+  (string-join
+   '("R16 -- A Racket Trick Bot for Discord"
+     "Brought to you by williewillus, Alwinfy, and Eutro"
+     ""
+     "Commands:"
+     "-  !rkt eval <code> => evaluate the rest of the message as a Racket form"
+     "-  !rkt register <name> <code> => register the given Racket form as a trick with the given name"
+     "-  !rkt call <name> ... => invoke the named trick, passing it the rest of the message as arguments. Arguments are parsed and split similar to POSIX shell."
+     "-  !rkt show <name> => show metadata and source for the named trick"
+     "-  !rkt help => show this message"
+     ""
+     "The following data is available in the trick environment:"
+     "-  message-contents => Full text of the invoking command, as a string"
+     "-  args => List of string arguments to the trick"
+     "-  delete-self => Function which, when called, deletes the user message that invoked the trick")
+   "\n"))
+
 (define command-table
   `(("eval"     . ,run-snippet)
     ("register" . ,register-trick)
     ("call"     . ,call-trick)
+    ("help"     . ,(thunk* help))
     ("show"     . ,show-trick)))
 
 (define (dispatch-command client db message text)
