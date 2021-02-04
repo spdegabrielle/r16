@@ -1,6 +1,10 @@
 #lang racket
 
-(require racket-cord racket/contract racket/hash racket/serialize)
+(require
+  (only-in racket-cord message?)
+  racket/contract
+  racket/hash
+  racket/serialize)
 
 (define saveable-trick? serializable?)
 

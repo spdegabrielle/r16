@@ -1,12 +1,14 @@
 #!/usr/bin/env racket
 #lang racket
 
-(require (prefix-in shlex: shlex))
-(require (prefix-in rc: racket-cord))
-(require (prefix-in sz: racket/serialize))
-(require (prefix-in http: racket-cord/http))
-(require (prefix-in ev: "evaluator.rkt"))
-(require (prefix-in db: "trick-db.rkt"))
+(require
+  (prefix-in rc: racket-cord)
+  (prefix-in http: racket-cord/http)
+  (prefix-in db: "trick-db.rkt")
+
+  (only-in shlex (split shlex:split))
+  (only-in racket/serialize serializable-struct)
+  (only-in "evaluator.rkt" (run ev:run)))
 
 ; williewillus#8490, maintainer, & Vazkii#0999, whose server we hope to run this in
 (define bot-admins '("132691314784337920" "156785583723642881"))
@@ -36,7 +38,7 @@
 
 (define message-author-id (compose1 rc:user-id rc:message-author))
 
-(sz:serializable-struct trick (author body created))
+(serializable-struct trick (author body created))
 
 (define (can-modify? message trick)
   (let ([author-id (message-author-id message)])
