@@ -71,13 +71,21 @@
           (~a "Missing the name for the trick!")))
       (~a "Cannot run tricks for this type of message!"))))
 
+(define deleter-thread
+  (thread (thunk
+    (let loop ()
+      (match-let ([(cons client message) (thread-receive)])
+        (with-handlers ([exn:fail:network? identity]) (http:delete-message client (rc:message-channel-id message) (rc:message-id message)))
+        (loop))))))
+
+
 (define (make-trick body message) (trick (message-author-id message) (strip-backticks body) (rc:message-timestamp message)))
 
 (define (evaluation-ctx client message args)
   `((message-contents . ,(rc:message-content message))
     (args             . ,args)
     ; TODO: This doesn't get work, it gets blocked by HTTP sandbox; perhaps send a message to a worker thread?
-    (delete-caller    . ,(thunk (http:delete-message client (rc:message-channel-id message) (rc:message-id message))))))
+    (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message))))))
 
 (define (run-snippet client _ message code)
   (let ([code (strip-backticks code)]
