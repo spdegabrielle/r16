@@ -1,7 +1,12 @@
 #lang racket
 
-(require racket/sandbox)
-(provide run)
+(define definitions? (listof (cons/c symbol? any/c)))
+
+(require racket/contract racket/sandbox)
+(provide
+  (contract-out
+    (definitions? (-> any/c boolean?))
+    (run (-> string? definitions? string?))))
 
 (define (format-response value stderr)
   (format "~a~a"
@@ -10,19 +15,25 @@
               (string-append "\n:warning: stderr:\n" stderr)
               "")))
 
-(define (test) (random 5))
+; Evaluate a form, then quote it
+(define (eval-quote form) `',form)
 
-(define (init-evaluator text args)
+(define (make-definition definitions)
+  (when definitions
+    `(define-values
+      ,(map car definitions)
+      (values ,@(map (compose1 eval-quote cdr) definitions)))))
+
+(define (init-evaluator definitions)
   (parameterize ([sandbox-output #f]
                  [sandbox-error-output 'string]
                  [sandbox-propagate-exceptions #f])
     (make-evaluator
      'racket
-     `(define message-contents ',text)
-     `(define args ',args))))
+     (make-definition definitions))))
 
-(define (run code text args)
-  (let* ((evaluator (init-evaluator text args))
+(define (run code definitions)
+  (let* ((evaluator (init-evaluator definitions))
          (result (evaluator code))
          (stderr (get-error-output evaluator)))
     (kill-evaluator evaluator)

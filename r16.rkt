@@ -68,6 +68,12 @@
 
 (define (make-trick body message) (trick (message-author-id message) (strip-backticks body) (rc:message-timestamp message)))
 
+(define (evaluation-ctx client message args)
+  `((message-contents . ,(rc:message-content message))
+    (args             . ,args)
+    ; TODO: This doesn't get work, it gets blocked by HTTP sandbox; perhaps send a message to a worker thread?
+    (delete-caller    . ,(thunk (http:delete-message client (rc:message-channel-id message) (rc:message-id message))))))
+
 (define (run-snippet client _ message code)
   (let ([code (strip-backticks code)]
         [text (rc:message-content message)])
@@ -89,7 +95,13 @@
     context name body
     (let ([trick (db:get-trick context name)])
       (if trick
-        (codeblock-quote (ev:run (trick-body trick) (rc:message-content message) (if body (string-split body) '())))
+        (codeblock-quote
+          (ev:run
+            (trick-body trick)
+            (evaluation-ctx
+              client
+              message
+              (if body (string-split body) '()))))
         (~a "Trick " name " doesn't exist!")))))
 
 (define (show-trick client db message text)
