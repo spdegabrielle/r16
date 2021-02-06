@@ -154,6 +154,7 @@
   (string-replace
     (string-join
      '("R16 -- A Racket Trick Bot for Discord"
+       (~a "Running on Racket " (version))
        "Brought to you by williewillus, Alwinfy, and Eutro"
        ""
        "Commands:"
