@@ -87,12 +87,6 @@
          (strip-backticks body)
          (rc:message-timestamp message)))
 
-(define (evaluation-ctx client message args)
-  `((message-contents . ,(rc:message-content message))
-    (string-args      . ,args)
-    (shlex-args       . ,(thunk (shlex:split args)))
-    (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message))))))
-
 (define (run-snippet client _ message code)
   (let ([code (strip-backticks code)]
         [text (rc:message-content message)])
@@ -174,10 +168,20 @@
        "The following data is available in the trick environment:"
        "-  all symbols from the `threading-lib` package (for utility purposes)"
        "-  message-contents => Full text of the invoking command, as a string"
-       "-  args => List of string arguments to the trick"
-       "-  delete-self => Thunk that removes the message that invoked the trick")
+       "-  string-args => Message contents after the bot command, as a string"
+       "-  shlex-args => Message contents after the bot command, as split by the shlex package, or #f if there was a split failure"
+       #;"-  delete-caller => Thunk that removes the message that invoked the trick")
      "\n")
     "PREFIX" prefix))
+
+(define (evaluation-ctx client message args)
+  (let ([shlex-args (thunk
+                     (with-handlers ([exn:fail:read:eof? #f])
+                       (shlex:split args)))])
+    `((message-contents . ,(rc:message-content message))
+      (string-args      . ,args)
+      (shlex-args       . ,shlex-args)
+      (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message)))))))
 
 (define command-table
   `(("eval"     . ,run-snippet)
