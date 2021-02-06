@@ -224,7 +224,12 @@
 (define (init-client token)
   (let* ([client (rc:make-client token #:auto-shard #t)]
          [db     (make-db client "tricks.rktd")])
-    (thread (thunk (sleep 30) (db:commit-db! db)))
+    (thread
+      (thunk
+        (let loop ()
+          (sleep 30)
+          (db:commit-db! db)
+          (loop))))
     (rc:on-event 'message-create client (message-received db))
     client))
 
