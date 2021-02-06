@@ -145,7 +145,7 @@
           "Source for trick **"
           name
           "**, created by "
-          (get-user-tag (trick-author trick))
+          (get-user-tag client (trick-author trick))
           ":\n"
           (codeblock-quote (trick-body trick)))
         (~a "Trick " name " doesn't exist!")))))
