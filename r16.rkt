@@ -131,7 +131,7 @@
   (check-trick-prereqs
     db message text
     context name body
-    (if (db:remove-trick! context name (thunk (make-trick body message)) (curry can-modify? message))
+    (if (db:remove-trick! context name (curry can-modify? message))
       (~a "Successfully removed trick " name "!")
       (~a "Trick " name " doesn't exist, or you can't remove it!"))))
 
