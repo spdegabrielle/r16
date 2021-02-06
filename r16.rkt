@@ -85,7 +85,8 @@
 
 (define (evaluation-ctx client message args)
   `((message-contents . ,(rc:message-content message))
-    (args             . ,args)
+    (string-args      . ,args)
+    (shlex-args       . ,(thunk (shlex:split args)))
     ; TODO: This doesn't get work, it gets blocked by HTTP sandbox; perhaps send a message to a worker thread?
     (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message))))))
 
@@ -116,7 +117,7 @@
             (evaluation-ctx
               client
               message
-              (if body (shlex:split body) '()))))
+              (or body ""))))
         (~a "Trick " name " doesn't exist!")))))
 
 (define (update-trick client db message text)
