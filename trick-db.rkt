@@ -88,6 +88,7 @@
     (let* ((table  (trick-context-data context))
            (create (not (hash-has-key? table name))))
       (when create
+        (log-info (~a "Trick created: " name))
         (mark-dirty context)
         (hash-set! table name (thunk)))
       create)))
@@ -97,6 +98,7 @@
     (let* ((table  (trick-context-data context))
            (modify (and (hash-has-key? table name) (perm-check (hash-ref table name)))))
       (when modify
+        (log-info (~a "Trick updated: " name))
         (mark-dirty context)
         (hash-set! table name (thunk)))
       modify)))
@@ -106,6 +108,7 @@
     (let* ((table  (trick-context-data context))
            (remove (and (hash-has-key? table name) (perm-check (hash-ref table name)))))
       (when remove
+        (log-info (~a "Trick deleted: " name))
         (mark-dirty context)
         (hash-remove! table name))
       remove)))
@@ -120,4 +123,5 @@
             (lambda (port _)
               (write (serialize-db db) port)
               (set-trickdb-dirty! db #f)
+              (log-debug "db flushed")
               #t))))))
