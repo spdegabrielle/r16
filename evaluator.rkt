@@ -9,10 +9,12 @@
 
 (define definitions? (listof (cons/c symbol? any/c)))
 
-(define (format-response value stdout stderr)
+(define (format-response results stdout stderr)
   (format "~a~a~a"
-          (if (void? value) "" value)
           stdout
+          (string-join
+            (map ~a (filter (negate void?) results))
+            "\n")
           (if (non-empty-string? stderr)
               (string-append "\n:warning: stderr:\n" stderr)
               "")))
@@ -37,8 +39,8 @@
 
 (define (run code definitions)
   (let* ((evaluator (init-evaluator definitions))
-         (result (evaluator code))
+         (results (call-with-values (thunk (evaluator code)) list))
          (stdout (get-output evaluator))
          (stderr (get-error-output evaluator)))
     (kill-evaluator evaluator)
-    (format-response result stdout stderr)))
+    (format-response results stdout stderr)))
