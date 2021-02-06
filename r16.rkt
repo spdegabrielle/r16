@@ -191,6 +191,7 @@
     ("update"   . ,update-trick)
     ("delete"   . ,delete-trick)
     ("help"     . ,(thunk* help))
+    ("save"     . ,(lambda (client db msg text) (if (db:commit-db! db) "Saved" "Nothing to save or error saving")))
     ("show"     . ,show-trick)))
 
 (define (parse-command content)
