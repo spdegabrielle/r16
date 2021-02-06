@@ -9,9 +9,10 @@
 
 (define definitions? (listof (cons/c symbol? any/c)))
 
-(define (format-response value stderr)
-  (format "~a~a"
+(define (format-response value stdout stderr)
+  (format "~a~a~a"
           (if (void? value) "" value)
+          stdout
           (if (non-empty-string? stderr)
               (string-append "\n:warning: stderr:\n" stderr)
               "")))
@@ -26,7 +27,7 @@
       (values ,@(map (compose1 eval-quote cdr) definitions)))))
 
 (define (init-evaluator definitions)
-  (parameterize ([sandbox-output #f]
+  (parameterize ([sandbox-output 'string]
                  [sandbox-error-output 'string]
                  [sandbox-propagate-exceptions #f])
     (make-evaluator
@@ -37,6 +38,7 @@
 (define (run code definitions)
   (let* ((evaluator (init-evaluator definitions))
          (result (evaluator code))
+         (stdout (get-output evaluator))
          (stderr (get-error-output evaluator)))
     (kill-evaluator evaluator)
-    (format-response result stderr)))
+    (format-response result stdout stderr)))
