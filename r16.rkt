@@ -28,7 +28,7 @@
   (hash-ref! user-cache uid
     (thunk
       (let ([user (http:get-user client uid)])
-        (format "~a#~a" (rc:user-username uid) (rc:user-discriminator uid))))))
+        (format "~a#~a" (rc:user-username user) (rc:user-discriminator user))))))
 
 (define ((contextualizer client) message)
   (let ([channel (http:get-channel client (rc:message-channel-id message))])
@@ -90,7 +90,7 @@
 (define (run-snippet client _ message code)
   (let ([code (strip-backticks code)]
         [text (rc:message-content message)])
-    (ev:run code (evaluation-ctx client message '()))))
+    (ev:run code (evaluation-ctx client message ""))))
 
 (define (register-trick client db message text)
   (check-trick-prereqs
@@ -108,13 +108,12 @@
     context name body
     (let ([trick (db:get-trick context name)])
       (if trick
-        (codeblock-quote
-          (ev:run
-            (trick-body trick)
-            (evaluation-ctx
-              client
-              message
-              (or body ""))))
+        (ev:run
+          (trick-body trick)
+          (evaluation-ctx
+            client
+            message
+            (or body "")))
         (~a "Trick " name " doesn't exist!")))))
 
 (define (update-trick client db message text)
