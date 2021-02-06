@@ -24,9 +24,12 @@
     (add-trick! (-> trick-context? trick-key? (-> saveable-trick?) boolean?))
     (update-trick! (-> trick-context? trick-key? (-> saveable-trick?) permission-check? boolean?))
     (remove-trick! (-> trick-context? trick-key? permission-check? boolean?))
-    (commit-db! (->* (trickdb?) ((or/c #f (-> exn? any/c))) boolean?))))
+    (commit-db! (-> trickdb? boolean?))))
 
+; data: guild -> trick-context
 (struct trickdb (data filename contextualizer (dirty #:mutable) lock))
+
+; data: trick-key -> trick
 (struct trick-context (data db))
 
 (define (serialize-db db)
@@ -58,8 +61,6 @@
     db))
 
 (define-syntax-rule (with-db-lock db . body)
-  ;; Uncomment this & comment next line if you don't like concurrency
-  ;body)
   (call-with-semaphore (trickdb-lock db) (thunk . body)))
 
 (define (mark-dirty ctx) (set-trickdb-dirty! (trick-context-db ctx) #t))
@@ -109,12 +110,14 @@
         (hash-remove! table name))
       remove)))
 
-(define (commit-db! db (error-callback #f))
+(define (commit-db! db)
   (with-db-lock db
     (and (trickdb-dirty db)
-      (with-handlers ((exn:fail? (lambda (e) (when error-callback (error-callback e)) #f)))
-        (call-with-atomic-output-file (trickdb-filename db)
-          (lambda (port _)
-            (write (serialize-db db) port)
-            (set-trickdb-dirty! db #f)
-            #t))))))
+         (with-handlers ((exn:fail? (lambda (e)
+                                      (log-error (~a "Error saving tricks: " e)) #f)))
+           (call-with-atomic-output-file
+            (trickdb-filename db)
+            (lambda (port _)
+              (write (serialize-db db) port)
+              (set-trickdb-dirty! db #f)
+              #t))))))

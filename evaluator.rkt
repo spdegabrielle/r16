@@ -1,12 +1,13 @@
 #lang racket
 
-(define definitions? (listof (cons/c symbol? any/c)))
-
 (require racket/contract racket/sandbox)
+
 (provide
+  definitions?
   (contract-out
-    (definitions? (-> any/c boolean?))
-    (run (-> string? definitions? string?))))
+   (run (-> string? definitions? string?))))
+
+(define definitions? (listof (cons/c symbol? any/c)))
 
 (define (format-response value stderr)
   (format "~a~a"

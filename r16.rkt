@@ -74,20 +74,23 @@
       (~a "Cannot run tricks for this type of message!"))))
 
 (define deleter-thread
-  (thread (thunk
-    (let loop ()
-      (match-let ([(cons client message) (thread-receive)])
-        (with-handlers ([exn:fail:network? identity]) (http:delete-message client (rc:message-channel-id message) (rc:message-id message)))
-        (loop))))))
+  (thread
+   (thunk (let loop ()
+            (match-let ([(cons client message) (thread-receive)])
+              (with-handlers ([exn:fail:network? identity])
+                (http:delete-message client (rc:message-channel-id message) (rc:message-id message)))
+              (loop))))))
 
 
-(define (make-trick body message) (trick (message-author-id message) (strip-backticks body) (rc:message-timestamp message)))
+(define (make-trick body message)
+  (trick (message-author-id message)
+         (strip-backticks body)
+         (rc:message-timestamp message)))
 
 (define (evaluation-ctx client message args)
   `((message-contents . ,(rc:message-content message))
     (string-args      . ,args)
     (shlex-args       . ,(thunk (shlex:split args)))
-    ; TODO: This doesn't get work, it gets blocked by HTTP sandbox; perhaps send a message to a worker thread?
     (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message))))))
 
 (define (run-snippet client _ message code)
@@ -102,7 +105,7 @@
     (cond
       [(not body) (~a "Trick " name " needs a body!")]
       [(db:add-trick! context name (thunk (make-trick body message)))
-        (~a "Successfully registered trick " name "!")]
+       (~a "Successfully registered trick " name "!")]
       [else (~a "Trick " name " already exists!")])))
 
 (define (call-trick client db message text)
@@ -127,7 +130,7 @@
     (cond
       [(not body) (~a "Trick " name " needs a body!")]
       [(db:update-trick! context name (thunk (make-trick body message)) (curry can-modify? message))
-        (~a "Successfully updated trick " name "!")]
+       (~a "Successfully updated trick " name "!")]
       [else (~a "Trick " name " doesn't exist, or you can't modify it!")])))
 
 (define (delete-trick client db message text)
@@ -185,7 +188,7 @@
     ("help"     . ,(thunk* help))
     ("show"     . ,show-trick)))
 
-(define (parse-prefix content)
+(define (parse-command content)
   (cond
     ; If trick-prefix, return (call-trick rest)
     [(string-prefix? content trick-prefix)
@@ -207,7 +210,7 @@
   (let ([content (string-trim (rc:message-content message))]
         [channel (rc:message-channel-id message)])
     (unless (message-from-bot? message)
-      (match-let ([(cons func content) (parse-prefix content)])
+      (match-let ([(cons func content) (parse-command content)])
         (when func
           (let ([response (func client db message content)])
             (http:create-message client channel response)))))))
@@ -215,7 +218,7 @@
 (define (init-client token)
   (let* ([client (rc:make-client token #:auto-shard #t)]
          [db     (make-db client "tricks.rktd")])
-    (thread (thunk (sleep 60) (db:commit-db! db)))
+    (thread (thunk (sleep 30) (db:commit-db! db)))
     (rc:on-event 'message-create client (message-received db))
     client))
 
