@@ -157,11 +157,12 @@
        "Brought to you by williewillus, Alwinfy, and Eutro"
        ""
        "Commands:"
-       "-  PREFIXeval <code> => evaluate the rest of the message as a Racket form"
-       "-  PREFIXregister <name> <code> => register the given Racket form as a trick with the given name"
-       "-  PREFIXcall <name> ... => invoke the named trick, passing it the rest of the message as arguments; arguments are split shell-style"
+       "-  PREFIXeval <code> => evaluate <code> as a Racket form"
+       "-  PREFIXregister <name> <code> => register <code> as a trick with name <name>"
+       "-  PREFIXcall <name> ... => invoke the named trick, evaluating its source code verbatim in a fresh sandbox"
+       "-  !!<trickname> => shorthand for PREFIXcall <trickname>"
        "-  PREFIXshow <name> => show metadata and source for the named trick"
-       "-  PREFIXupdate <name> => change the source of the named trick; requires ownership or administrator"
+       "-  PREFIXupdate <name> <code> => change the source of the named trick; requires ownership or administrator"
        "-  PREFIXdelete <name> => delete the named trick; requires ownership or administrator and cannot be undone!"
        "-  PREFIXhelp => show this message"
        ""
@@ -169,8 +170,8 @@
        "-  all symbols from the `threading-lib` package (for utility purposes)"
        "-  message-contents => Full text of the invoking command, as a string"
        "-  string-args => Message contents after the bot command, as a string"
-       "-  shlex-args => Message contents after the bot command, as split by the shlex package, or #f if there was a split failure"
-       #;"-  delete-caller => Thunk that removes the message that invoked the trick")
+       "-  shlex-args => Thunk that returns message contents after the bot command, as split by the shlex package, or #f if there was a split failure"
+       "-  delete-caller => Thunk that removes the call or eval command that ran this code")
      "\n")
     "PREFIX" prefix))
 
