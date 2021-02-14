@@ -233,11 +233,14 @@
     (rc:on-event 'message-create client (message-received db))
     client))
 
+(define (get-token)
+  (let* ([port (open-input-file "token")]
+         [token (read-line port)])
+    (close-input-port port)
+    token))
+
 (define (main)
-  (let ([token (getenv "BOT_TOKEN")])
-    (if (not token)
-        (error "No token provided")
-        (rc:start-client (init-client token)))))
+  (rc:start-client (init-client (get-token))))
 
 (module* main #f
   (main))
