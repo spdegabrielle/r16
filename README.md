@@ -10,4 +10,5 @@ NOTE: The list of administrators is currently hardcoded. Please change it in r16
 1. Clone this repository
 2. `raco pkg install racket-cord threading shlex`
 3. `raco make` (optional)
-4. `BOT_TOKEN=<your discord bot token> racket r16.rkt`
+4. Put your bot token in a file called `token` in your working directory (ignored by Git)
+5. `racket r16.rkt`
