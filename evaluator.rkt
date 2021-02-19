@@ -33,8 +33,9 @@
          (stdout (get-output evaluator))
          (stderr (get-error-output evaluator)))
     (kill-evaluator evaluator)
-    (values stdout
-            (apply values results)
-            (if (non-empty-string? stderr)
-                (string-append "\n:warning: stderr:\n" stderr)
-                (void)))))
+    (apply values
+           `(,stdout
+             ,@results
+             ,(if (non-empty-string? stderr)
+                  (string-append "\n:warning: stderr:\n" stderr)
+                  (void))))))
