@@ -168,12 +168,17 @@
        ""
        "The following data is available in the trick environment:"
        "-  all symbols from the `threading-lib` package (for utility purposes)"
+       "-  make-attachment => Procedure that makes an attachment from a byte-string, file name and MIME type"
        "-  message-contents => Full text of the invoking command, as a string"
        "-  string-args => Message contents after the bot command, as a string"
        "-  shlex-args => Thunk that returns message contents after the bot command, as split by the shlex package, or #f if there was a split failure"
        "-  delete-caller => Thunk that removes the call or eval command that ran this code")
      "\n")
     "PREFIX" prefix))
+
+(define/contract (make-attachment data name type)
+  (-> bytes? string? (or/c symbol? string?) http:attachment?)
+  (http:attachment data type name))
 
 (define (evaluation-ctx client message args)
   (let ([shlex-args (thunk
@@ -182,7 +187,8 @@
     `((message-contents . ,(rc:message-content message))
       (string-args      . ,args)
       (shlex-args       . ,shlex-args)
-      (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message)))))))
+      (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message))))
+      (make-attachment  . ,make-attachment))))
 
 (define command-table
   `(("eval"     . ,run-snippet)
@@ -212,14 +218,36 @@
     ; Return falsey value for func
     [else (cons #f content)]))
 
+(define char-cap 2000)
+(define slice-size 30)
+
+(define (truncate-string str cap)
+  (let ([len (string-length str)])
+    (if (> len cap)
+      (let* ([slicepos (- cap slice-size)] [restsize (- len slicepos)])
+        (format "~a... [~a more characters]" (substring str 0 slicepos) restsize))
+      str)))
+
+(define (create-message-with-contents client channel . contents)
+  (let* ([content (apply ~a #:separator "\n"
+                         (filter (negate (disjoin void?
+                                                  http:attachment?
+                                                  (negate non-empty-string?)))
+                                 contents))]
+         [attachment (findf http:attachment? contents)]
+         [content (if (or attachment (non-empty-string? content))
+                      (truncate-string content char-cap)
+                      "\u200b")])
+    (http:create-message client channel content #:file attachment)))
+
 (define ((message-received db) client message)
   (let ([content (string-trim (rc:message-content message))]
         [channel (rc:message-channel-id message)])
     (unless (message-from-bot? message)
       (match-let ([(cons func content) (parse-command content)])
         (when func
-          (let ([response (func client db message content)])
-            (http:create-message client channel response)))))))
+          (call-with-values (thunk (func client db message content))
+                            (curry create-message-with-contents client channel)))))))
 
 (define (init-client token)
   (let* ([client (rc:make-client token #:auto-shard #t)]
