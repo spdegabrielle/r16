@@ -177,8 +177,8 @@
     "PREFIX" prefix))
 
 (define/contract (make-attachment data name type)
-  (-> bytes? string? (or/c symbol? string?) http:attachment?)
-  (http:attachment data type name))
+  (-> bytes? (or/c string? bytes?) (or/c symbol? string? bytes?) http:attachment?)
+  (http:attachment data (~a type) name))
 
 (define (evaluation-ctx client message args)
   (let ([shlex-args (thunk
@@ -228,12 +228,13 @@
         (format "~a... [~a more characters]" (substring str 0 slicepos) restsize))
       str)))
 
+(define (empty-string? s)
+  (and (string? s) (= (string-length s) 0)))
+
 (define (create-message-with-contents client channel . contents)
   (let* ([content (apply ~a #:separator "\n"
-                         (filter (negate (disjoin void?
-                                                  http:attachment?
-                                                  (negate non-empty-string?)))
-                                 contents))]
+                         (filter-not (disjoin void? http:attachment? empty-string?)
+                                     contents))]
          [attachment (findf http:attachment? contents)]
          [content (if (or attachment (non-empty-string? content))
                       (truncate-string content char-cap)
