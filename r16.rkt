@@ -268,7 +268,16 @@
     (close-input-port port)
     token))
 
+(define dr (make-log-receiver rc:discord-logger 'debug))
+
 (define (main)
+  (thread
+   (thunk
+    (let loop ()
+      (let ([v (sync dr)])
+        (printf "[~a] ~a\n" (vector-ref v 0)
+                (vector-ref v 1)))
+      (loop))))
   (rc:start-client (init-client (get-token))))
 
 (module* main #f
