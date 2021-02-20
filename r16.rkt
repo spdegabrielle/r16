@@ -253,7 +253,7 @@
 (define (init-client token)
   (let* ([client (rc:make-client token
                                  #:auto-shard #t
-                                 #:intents (list intent-guilds intent-guild-messages))]
+                                 #:intents (list rc:intent-guilds rc:intent-guild-messages))]
          [db     (make-db client "tricks.rktd")])
     (thread
       (thunk
