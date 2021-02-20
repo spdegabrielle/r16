@@ -251,7 +251,9 @@
                             (curry create-message-with-contents client channel)))))))
 
 (define (init-client token)
-  (let* ([client (rc:make-client token #:auto-shard #t)]
+  (let* ([client (rc:make-client token
+                                 #:auto-shard #t
+                                 #:intents '(intent-guilds intent-guild-messages))]
          [db     (make-db client "tricks.rktd")])
     (thread
       (thunk
