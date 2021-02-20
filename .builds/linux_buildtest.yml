@@ -1,0 +1,10 @@
+image: archlinux
+packages:
+  - racket
+sources:
+  - https://git.sr.ht/~williewillus/r16
+tasks:
+  - build: |
+      cd r16
+      raco pkg install --auto racket-cord shlex threading-lib
+      raco make r16.rkt

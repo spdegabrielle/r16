@@ -8,7 +8,6 @@ NOTE: The list of administrators is currently hardcoded. Please change it in r16
 
 ## Usage
 1. Clone this repository
-2. `raco pkg install racket-cord threading shlex`
-3. `raco make` (optional)
+2. `raco setup -l r16`
 4. Put your bot token in a file called `token` in your working directory (ignored by Git)
 5. `racket r16.rkt`
