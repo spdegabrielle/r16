@@ -20,9 +20,10 @@
     (make-trickdb (-> contextualizer? path-string? trickdb?))
     (get-trick-context (-> trickdb? message? (or/c trick-context? #f)))
     (list-tricks (-> trick-context? (listof trick-key?)))
+    (all-tricks (-> trick-context? (listof (cons/c trick-key? saveable-trick?))))
     (get-trick (-> trick-context? trick-key? (or/c saveable-trick? #f)))
     (add-trick! (-> trick-context? trick-key? (-> saveable-trick?) boolean?))
-    (update-trick! (-> trick-context? trick-key? (-> saveable-trick?) permission-check? boolean?))
+    (update-trick! (-> trick-context? trick-key? (-> saveable-trick? saveable-trick?) permission-check? boolean?))
     (remove-trick! (-> trick-context? trick-key? permission-check? boolean?))
     (commit-db! (-> trickdb? boolean?))))
 
@@ -79,6 +80,10 @@
   (with-db-lock (trick-context-db context)
     (hash-keys (trick-context-data context))))
 
+(define (all-tricks context)
+  (with-db-lock (trick-context-db context)
+    (hash->list (trick-context-data context))))
+
 (define (get-trick context name)
   (with-db-lock (trick-context-db context)
     (hash-ref (trick-context-data context) name #f)))
@@ -100,7 +105,7 @@
       (when modify
         (log-info (~a "Trick updated: " name))
         (mark-dirty context)
-        (hash-set! table name (thunk)))
+        (hash-set! table name (thunk (hash-ref table name))))
       modify)))
 
 (define (remove-trick! context name perm-check)

@@ -7,7 +7,7 @@
   (prefix-in db: "trick-db.rkt")
 
   (only-in shlex (split shlex:split))
-  (only-in racket/serialize serializable-struct)
+  (only-in racket/serialize serializable-struct/versions)
   (only-in "evaluator.rkt" (run ev:run)))
 
 ; williewillus#8490, maintainer, & Vazkii#0999, whose server we hope to run this in
@@ -15,6 +15,7 @@
 
 (define prefix "!rkt ")
 (define trick-prefix "!!")
+(define leaderboard-size 10)
 
 (define (strip-trim msg prefix)
   (string-trim (substring msg (string-length prefix))))
@@ -38,7 +39,10 @@
 
 (define message-author-id (compose1 rc:user-id rc:message-author))
 
-(serializable-struct trick (author body created))
+(serializable-struct/versions trick 1 (author body created (invocations #:mutable))
+  ([0
+    (curryr trick 0)
+    #f]))
 
 (define (can-modify? message trick)
   (let ([author-id (message-author-id message)])
@@ -82,10 +86,11 @@
               (loop))))))
 
 
-(define (make-trick body message)
-  (trick (message-author-id message)
+(define (make-trick body message parent)
+  (trick (if parent (trick-author parent) (message-author-id message))
          (strip-backticks body)
-         (rc:message-timestamp message)))
+         (if parent (trick-created parent) (rc:message-timestamp message))
+         (if parent (trick-invocations parent) 0)))
 
 (define (run-snippet client _ message code)
   (let ([code (strip-backticks code)]
@@ -98,7 +103,7 @@
     context name body
     (cond
       [(not body) (~a "Trick " name " needs a body!")]
-      [(db:add-trick! context name (thunk (make-trick body message)))
+      [(db:add-trick! context name (thunk (make-trick body message #f)))
        (~a "Successfully registered trick " name "!")]
       [else (~a "Trick " name " already exists!")])))
 
@@ -108,12 +113,14 @@
     context name body
     (let ([trick (db:get-trick context name)])
       (if trick
-        (ev:run
-          (trick-body trick)
-          (evaluation-ctx
-            client
-            message
-            (or body "")))
+        (begin
+          (db:update-trick! context name (lambda (t) (set-trick-invocations! t (add1 (trick-invocations t))) t) (const #t))
+          (ev:run
+            (trick-body trick)
+            (evaluation-ctx
+              client
+              message
+              (or body ""))))
         (~a "Trick " name " doesn't exist!")))))
 
 (define (update-trick client db message text)
@@ -122,7 +129,7 @@
     context name body
     (cond
       [(not body) (~a "Trick " name " needs a body!")]
-      [(db:update-trick! context name (thunk (make-trick body message)) (curry can-modify? message))
+      [(db:update-trick! context name (curry make-trick body message) (curry can-modify? message))
        (~a "Successfully updated trick " name "!")]
       [else (~a "Trick " name " doesn't exist, or you can't modify it!")])))
 
@@ -134,6 +141,26 @@
       (~a "Successfully removed trick " name "!")
       (~a "Trick " name " doesn't exist, or you can't remove it!"))))
 
+(define (cmp-tricks lt rt)
+  (let ([l (cdr lt)] [r (cdr rt)])
+    (if (= (trick-invocations l) (trick-invocations r))
+      (string>? (trick-created l) (trick-created r))
+      (> (trick-invocations l) (trick-invocations r)))))
+
+(define (popular-tricks client db message text)
+  (let ([tricks (sort (db:all-tricks (db:get-trick-context db message)) cmp-tricks)])
+    (if (empty? tricks)
+      (~a "There aren't any tricks registered in your guild! Use `" prefix "register` to create one.")
+      (apply ~a "**Most popular tricks in your guild:**"
+        (for/list ([(trick i)
+                    (in-indexed
+                     (if (> (length tricks) leaderboard-size)
+                       (take tricks leaderboard-size)
+                       tricks))])
+          (~a
+            "\n" (add1 i) ". **" (car trick) "**, by " (get-user-tag client (trick-author (cdr trick)))
+            ", invoked **" (trick-invocations (cdr trick)) "**x"))))))
+
 (define (show-trick client db message text)
   (check-trick-prereqs
     db message text
@@ -141,11 +168,13 @@
     (let ([trick (db:get-trick context name)])
       (if trick
         (~a
-          "Source for trick **"
+          "Trick **"
           name
           "**, created by "
           (get-user-tag client (trick-author trick))
-          ":\n"
+          ", has been invoked **`"
+          (trick-invocations trick)
+          "`** times.\n__Source code:__\n"
           (codeblock-quote (trick-body trick)))
         (~a "Trick " name " doesn't exist!")))))
 
@@ -164,6 +193,7 @@
        "-  PREFIXshow <name> => show metadata and source for the named trick"
        "-  PREFIXupdate <name> <code> => change the source of the named trick; requires ownership or administrator"
        "-  PREFIXdelete <name> => delete the named trick; requires ownership or administrator and cannot be undone!"
+       "-  PREFIXpopular => show a leaderboard of popular tricks"
        "-  PREFIXhelp => show this message"
        ""
        "The following data is available in the trick environment:"
@@ -197,6 +227,7 @@
     ("update"   . ,update-trick)
     ("delete"   . ,delete-trick)
     ("help"     . ,(thunk* help))
+    ("popular"  . ,popular-tricks)
     ("save"     . ,(lambda (client db msg text) (if (db:commit-db! db) "Saved" "Nothing to save or error saving")))
     ("show"     . ,show-trick)))
 
