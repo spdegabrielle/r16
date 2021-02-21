@@ -20,8 +20,8 @@
   (string-trim (substring msg (string-length prefix))))
 
 (define (message-from-bot? message)
-  (and (not (null? (rc:message-author message)))
-       (not (null? (rc:user-bot (rc:message-author message))))))
+  (and (rc:message-author message)
+       (rc:user-bot (rc:message-author message))))
 
 (define user-cache (make-hash))
 (define (get-user-tag client uid)
