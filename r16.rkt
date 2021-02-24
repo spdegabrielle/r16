@@ -211,9 +211,9 @@
 (define/contract (make-attachment data name type)
   (-> bytes? (or/c string? bytes?) (or/c symbol? string? bytes?) http:attachment?)
   (http:attachment data (~a type) name))
-(define/contract (call-subtrick client trick-ctx message name arguments)
-  (-> rc:client? db:trick-context? rc:message? string? (or/c string? #f) any)
-  (let ([trick (db:get-trick trick-ctx name)])
+(define/contract ((call-subtrick client trick-ctx message) name arguments)
+  (-> rc:client? db:trick-context? rc:message? (or/c symbol? string?) (or/c string? #f) any)
+  (let ([trick (db:get-trick trick-ctx (~a name))])
     (if trick
       (match-let
         ([(list stdout vals ... stderr)
@@ -232,15 +232,14 @@
       (raise (make-exn:fail:contract (~a "Trick " name " doesn't exist!"))))))
 
 (define (evaluation-ctx client message trick-ctx args)
-  (let ([shlex-args (thunk
-                     (with-handlers ([exn:fail:read:eof? #f])
-                       (shlex:split args)))])
-    `((message-contents . ,(rc:message-content message))
-      (string-args      . ,args)
-      (shlex-args       . ,shlex-args)
-      (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message))))
-      (make-attachment  . ,make-attachment)
-      (call-trick       . ,(curry call-subtrick client trick-ctx message)))))
+  `((message-contents . ,(rc:message-content message))
+    (string-args      . ,args)
+    (shlex-args       . ,(thunk
+                          (with-handlers ([exn:fail:read:eof? #f])
+                            (shlex:split args))))
+    (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message))))
+    (make-attachment  . ,make-attachment)
+    (call-trick       . ,(call-subtrick client trick-ctx message))))
 
 (define command-table
   `(("eval"     . ,run-snippet)
