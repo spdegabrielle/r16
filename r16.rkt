@@ -92,10 +92,10 @@
          (if parent (trick-created parent) (rc:message-timestamp message))
          (if parent (trick-invocations parent) 0)))
 
-(define (run-snippet client _ message code)
+(define (run-snippet client db message code)
   (let ([code (strip-backticks code)]
         [text (rc:message-content message)])
-    (ev:run code (evaluation-ctx client message ""))))
+    (ev:run code (evaluation-ctx client message (db:get-trick-context db message) ""))))
 
 (define (register-trick client db message text)
   (check-trick-prereqs
@@ -120,6 +120,7 @@
             (evaluation-ctx
               client
               message
+              context
               (or body ""))))
         (~a "Trick " name " doesn't exist!")))))
 
@@ -199,6 +200,7 @@
        "The following data is available in the trick environment:"
        "-  all symbols from the `threading-lib` package (for utility purposes)"
        "-  make-attachment => Procedure that makes an attachment from a byte-string, file name and MIME type"
+       "-  call-trick => Procedure that calls another trick given a name and arguments"
        "-  message-contents => Full text of the invoking command, as a string"
        "-  string-args => Message contents after the bot command, as a string"
        "-  shlex-args => Thunk that returns message contents after the bot command, as split by the shlex package, or #f if there was a split failure"
@@ -209,8 +211,20 @@
 (define/contract (make-attachment data name type)
   (-> bytes? (or/c string? bytes?) (or/c symbol? string? bytes?) http:attachment?)
   (http:attachment data (~a type) name))
+(define/contract (call-subtrick client trick-ctx message name arguments)
+  (-> rc:client? db:trick-context? rc:message? string? (or/c string? #f) any)
+  (let ([trick (db:get-trick trick-ctx name)])
+    (if trick
+      (ev:run
+        (trick-body trick)
+        (evaluation-ctx
+          client
+          message
+          trick-ctx
+          (or arguments "")))
+      (raise (make-exn:fail:contract (~a "Trick " name " doesn't exist!"))))))
 
-(define (evaluation-ctx client message args)
+(define (evaluation-ctx client message trick-ctx args)
   (let ([shlex-args (thunk
                      (with-handlers ([exn:fail:read:eof? #f])
                        (shlex:split args)))])
@@ -218,7 +232,8 @@
       (string-args      . ,args)
       (shlex-args       . ,shlex-args)
       (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message))))
-      (make-attachment  . ,make-attachment))))
+      (make-attachment  . ,make-attachment)
+      (call-trick       . ,(curry call-subtrick client trick-ctx message)))))
 
 (define command-table
   `(("eval"     . ,run-snippet)

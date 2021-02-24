@@ -17,6 +17,7 @@
 (provide
   (contract-out
     (saveable-trick? (-> any/c boolean?))
+    (trick-context? (-> any/c boolean?))
     (make-trickdb (-> contextualizer? path-string? trickdb?))
     (get-trick-context (-> trickdb? message? (or/c trick-context? #f)))
     (list-tricks (-> trick-context? (listof trick-key?)))
