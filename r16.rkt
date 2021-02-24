@@ -215,13 +215,20 @@
   (-> rc:client? db:trick-context? rc:message? string? (or/c string? #f) any)
   (let ([trick (db:get-trick trick-ctx name)])
     (if trick
-      (ev:run
-        (trick-body trick)
-        (evaluation-ctx
-          client
-          message
-          trick-ctx
-          (or arguments "")))
+      (match-let
+        ([(list stdout vals ... stderr)
+          (call-with-values
+            (thunk (ev:run
+                    (trick-body trick)
+                    (evaluation-ctx
+                      client
+                      message
+                      trick-ctx
+                      (or arguments ""))))
+            list)])
+        (write-string stdout)
+        (unless (void? stderr) (write-string stderr (current-error-port)))
+        (apply values vals))
       (raise (make-exn:fail:contract (~a "Trick " name " doesn't exist!"))))))
 
 (define (evaluation-ctx client message trick-ctx args)
