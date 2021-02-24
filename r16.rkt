@@ -204,6 +204,7 @@
        "-  message-contents => Full text of the invoking command, as a string"
        "-  string-args => Message contents after the bot command, as a string"
        "-  shlex-args => Thunk that returns message contents after the bot command, as split by the shlex package, or #f if there was a split failure"
+       "-  read-args => Thunk that returns message contents after the bot command, as split by the Racket reader, or #f if there was a split failure"
        "-  delete-caller => Thunk that removes the call or eval command that ran this code")
      "\n")
     "PREFIX" prefix))
@@ -237,6 +238,11 @@
     (shlex-args       . ,(thunk
                           (with-handlers ([exn:fail:read:eof? #f])
                             (shlex:split args))))
+    (read-args        . ,(thunk
+                          (with-handlers ([exn:fail:read? #f])
+                            (let loop ([data (open-input-string string-args)])
+                              (let ([val (read data)])
+                                (if (eof-object? val) null (cons val (loop data))))))))
     (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message))))
     (make-attachment  . ,make-attachment)
     (call-trick       . ,(call-subtrick client trick-ctx message))))
