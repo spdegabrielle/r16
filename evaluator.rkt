@@ -25,7 +25,7 @@
     (make-evaluator
      'racket
      (make-definition definitions)
-     #:requires '(threading))))
+     '(require threading))))
 
 (define (run code definitions)
   (let* ((evaluator (init-evaluator definitions))
