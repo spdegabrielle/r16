@@ -53,9 +53,9 @@
       (member author-id bot-admins))))
 
 (define (strip-backticks code)
-  (let ([groups (regexp-match #px"```(\\w+\n)?(.+)```" code)])
+  (let ([groups (regexp-match #px"```(\\w+\n)?(.+)```|`(.+)`" code)])
     (if groups
-        (caddr groups)
+        (or (third groups) (fourth groups))
         code)))
 
 (define (codeblock-quote result)
@@ -231,16 +231,18 @@
       (raise (make-exn:fail:contract (~a "Trick " name " doesn't exist!"))))))
 
 (define (evaluation-ctx client message trick-ctx args)
-  `((message-contents . ,(rc:message-content message))
-    (string-args      . ,args)
-    (read-args        . ,(thunk
-                          (with-handlers ([exn:fail:read? #f])
-                            (let loop ([data (open-input-string args)])
-                              (let ([val (read data)])
-                                (if (eof-object? val) null (cons val (loop data))))))))
-    (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message))))
-    (make-attachment  . ,make-attachment)
-    (call-trick       . ,(call-subtrick client trick-ctx message))))
+  `(((message-contents . ,(rc:message-content message))
+     (string-args      . ,args)
+     (read-args        . ,(thunk
+                           (with-handlers ([exn:fail:read? #f])
+                             (let loop ([data (open-input-string args)])
+                               (let ([val (read data)])
+                                 (if (eof-object? val) null (cons val (loop data))))))))
+     (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message))))
+     (make-attachment  . ,make-attachment)
+     (call-trick       . ,(call-subtrick client trick-ctx message)))
+    .
+    (threading)))
 
 (define command-table
   `(("eval"     . ,run-snippet)
