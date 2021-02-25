@@ -284,15 +284,17 @@
 (define (empty-string? s)
   (and (string? s) (= (string-length s) 0)))
 
-(define (create-message-with-contents client channel . contents)
+(define (create-message-with-contents client channel message . contents)
   (let* ([content (apply ~a #:separator "\n"
                          (filter-not (disjoin void? http:attachment? empty-string?)
                                      contents))]
          [attachment (findf http:attachment? contents)]
          [content (if (or attachment (non-empty-string? content))
                       (truncate-string content char-cap)
-                      "\u200b")])
-    (http:create-message client channel content #:file attachment)))
+                      "\u200b")]
+         [reference #hash(['message_id . (rc:message-id message)]
+                          ['guild_id . (rc:message-guild-id message)])])
+    (http:create-message client channel content #:file attachment #:reply-to reference)))
 
 (define ((message-received db) client message)
   (let ([content (string-trim (rc:message-content message))]
@@ -301,7 +303,7 @@
       (match-let ([(cons func content) (parse-command content)])
         (when func
           (call-with-values (thunk (func client db message content))
-                            (curry create-message-with-contents client channel)))))))
+                            (curry create-message-with-contents client channel message)))))))
 
 (define (init-client token)
   (let* ([client (rc:make-client token
