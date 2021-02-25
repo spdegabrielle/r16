@@ -212,7 +212,7 @@
   (-> bytes? (or/c string? bytes?) (or/c symbol? string? bytes?) http:attachment?)
   (http:attachment data (~a type) name))
 (define/contract ((call-subtrick client trick-ctx message) name arguments)
-  (-> rc:client? db:trick-context? rc:message? (or/c symbol? string?) (or/c string? #f) any)
+  (-> rc:client? db:trick-context? rc:message? (-> (or/c symbol? string?) (or/c string? #f) any))
   (let ([trick (db:get-trick trick-ctx (~a name))])
     (if trick
       (match-let
