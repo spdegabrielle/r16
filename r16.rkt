@@ -294,7 +294,10 @@
                       "\u200b")]
          [reference (hash 'message_id (rc:message-id message)
                           'guild_id (rc:message-guild-id message))])
-    (http:create-message client channel content #:file attachment #:reply-to reference)))
+    (http:create-message client channel content
+                         #:file attachment
+                         #:reply-to reference
+                         #:allowed-mentions (hash 'parse '()))))
 
 (define ((message-received db) client message)
   (let ([content (string-trim (rc:message-content message))]
