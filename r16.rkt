@@ -96,7 +96,7 @@
 (define (run-snippet client db message code)
   (let ([code (strip-backticks code)]
         [text (rc:message-content message)])
-    (ev:run code (evaluation-ctx client message (db:get-trick-context db message) ""))))
+    (ev:run code (evaluation-ctx client message (db:get-trick-context db message) "" #f))))
 
 (define (register-trick client db message text)
   (check-trick-prereqs
@@ -122,7 +122,8 @@
               client
               message
               context
-              (or body ""))))
+              (or body "")
+              #f)))
         (~a "Trick " name " doesn't exist!")))))
 
 (define (update-trick client db message text)
@@ -205,15 +206,16 @@
        "-  message-contents => Full text of the invoking command, as a string"
        "-  string-args => Message contents after the bot command, as a string"
        "-  read-args => Thunk that returns message contents after the bot command, as split by the Racket reader, or #f if there was a split failure"
-       "-  delete-caller => Thunk that removes the call or eval command that ran this code")
+       "-  delete-caller => Thunk that removes the call or eval command that ran this code"
+       "-  parent-context => Mapping of the above symbols for the trick calling this one, or #f if this trick is top-level")
      "\n")
     "PREFIX" prefix))
 
 (define/contract (make-attachment data name type)
   (-> bytes? (or/c string? bytes?) (or/c symbol? string? bytes?) http:attachment?)
   (http:attachment data (~a type) name))
-(define/contract ((call-subtrick client trick-ctx message) name arguments)
-  (-> rc:client? db:trick-context? rc:message? (-> (or/c symbol? string?) (or/c string? #f) any))
+(define/contract ((call-subtrick client trick-ctx message parent-ctx) name arguments)
+  (-> rc:client? db:trick-context? rc:message? any/c (-> (or/c symbol? string?) any/c any))
   (let ([trick (db:get-trick trick-ctx (~a name))])
     (if trick
       (match-let
@@ -225,26 +227,30 @@
                       client
                       message
                       trick-ctx
-                      (or arguments ""))))
+                      (if arguments (~a arguments) "")
+                      parent-ctx)))
             list)])
         (write-string stdout)
         (unless (void? stderr) (write-string stderr (current-error-port)))
         (apply values vals))
       (raise (make-exn:fail:contract (~a "Trick " name " doesn't exist!"))))))
 
-(define (evaluation-ctx client message trick-ctx args)
-  `(((message-contents . ,(rc:message-content message))
-     (string-args      . ,args)
-     (read-args        . ,(thunk
-                           (with-handlers ([exn:fail:read? #f])
-                             (let loop ([data (open-input-string args)])
-                               (let ([val (read data)])
-                                 (if (eof-object? val) null (cons val (loop data))))))))
-     (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message))))
-     (make-attachment  . ,make-attachment)
-     (call-trick       . ,(call-subtrick client trick-ctx message)))
-    .
-    (threading)))
+(define (evaluation-ctx client message trick-ctx args parent-ctx)
+  (let* ([placeholder (make-placeholder #f)]
+         [ctx
+          `((message-contents . ,(rc:message-content message))
+            (string-args      . ,args)
+            (read-args        . ,(thunk
+                                  (with-handlers ([exn:fail:read? #f])
+                                    (let loop ([data (open-input-string args)])
+                                      (let ([val (read data)])
+                                        (if (eof-object? val) null (cons val (loop data))))))))
+            (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message))))
+            (make-attachment  . ,make-attachment)
+            (call-trick       . ,(call-subtrick client trick-ctx message placeholder))
+            (parent-context   . ,parent-ctx))])
+    (placeholder-set! placeholder (make-hash ctx))
+    (cons (make-reader-graph ctx) '(threading))))
 
 (define command-table
   `(("eval"     . ,run-snippet)
