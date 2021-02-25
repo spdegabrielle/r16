@@ -292,8 +292,8 @@
          [content (if (or attachment (non-empty-string? content))
                       (truncate-string content char-cap)
                       "\u200b")]
-         [reference #hash(['message_id . (rc:message-id message)]
-                          ['guild_id . (rc:message-guild-id message)])])
+         [reference #hash(['message_id . ,(rc:message-id message)]
+                          ['guild_id . ,(rc:message-guild-id message)])])
     (http:create-message client channel content #:file attachment #:reply-to reference)))
 
 (define ((message-received db) client message)
