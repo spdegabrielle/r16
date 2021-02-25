@@ -26,40 +26,41 @@
 (define default-sandbox-reader (sandbox-reader))
 
 (define ((language-morph-reader definitions) value)
-  (let* ([exprs (parameterize ([read-accept-reader #t]
-                               [read-accept-lang #t])
-                  (default-sandbox-reader value))])
+  (let ([exprs (parameterize ([read-accept-reader #t]
+                              [read-accept-lang #t])
+                 (default-sandbox-reader value))])
     (or
      (and
       (= (length exprs) 1)
       (syntax-case* (car exprs) (module) literal-identifier=?
         [(module modname lang body ...)
          (let ([full-stx
-                #`(;; define a language that provides the sandbox definitions,
-                   ;; but also all of the lang's definitions
-                   (module sandbox-language racket
-                     (provide (all-defined-out)
-                              #,@(map (curry list 'all-from-out)
-                                      (cdr definitions))
-                              (all-from-out lang))
-                     #,(make-definition definitions)
-                     ;; require everything else at the end
-                     (require lang))
-                   ;; define the module with the new language
-                   (module program 'sandbox-language
-                     body ...)
-                   ;; instantiate the module
-                   ;; if it provides r16-main, return it
-                   (define main
-                     (dynamic-require ''program 'r16-main
-                                      (thunk (dynamic-require ''program #f))))
-                   (if (and (procedure? main)
-                            (procedure-arity-includes? main 0))
-                       (main)
-                       main))])
+                #`(begin
+                    ;; define a language that provides the sandbox definitions,
+                    ;; but also all of the lang's definitions
+                    (module sandbox-language racket
+                      (provide (all-defined-out)
+                               #,@(map (curry list 'all-from-out)
+                                       (cdr definitions))
+                               (all-from-out lang))
+                      #,(make-definition definitions)
+                      ;; require everything else at the end
+                      (require lang))
+                    ;; define the module with the new language
+                    (module program 'sandbox-language
+                      body ...)
+                    ;; instantiate the module
+                    ;; if it provides r16-main, return it
+                    (define main
+                      (dynamic-require ''program 'r16-main
+                                       (thunk (dynamic-require ''program #f))))
+                    (if (and (procedure? main)
+                             (procedure-arity-includes? main 0))
+                        (main)
+                        main))])
            ;; replace the lexical context,
            ;; allowing for the sandbox definitions to be used
-           (map (curry replace-context full-stx) (syntax->list full-stx)))]
+           (list (replace-context full-stx full-stx)))]
         [_ #f]))
      (cons (make-definition definitions) exprs))))
 
