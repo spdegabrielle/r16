@@ -6,7 +6,6 @@
   (prefix-in http: racket-cord/http)
   (prefix-in db: "trick-db.rkt")
 
-  (only-in shlex (split shlex:split))
   (only-in racket/serialize serializable-struct/versions)
   (only-in "evaluator.rkt" (run ev:run)))
 
@@ -203,7 +202,6 @@
        "-  call-trick => Procedure that calls another trick given a name and arguments"
        "-  message-contents => Full text of the invoking command, as a string"
        "-  string-args => Message contents after the bot command, as a string"
-       "-  shlex-args => Thunk that returns message contents after the bot command, as split by the shlex package, or #f if there was a split failure"
        "-  read-args => Thunk that returns message contents after the bot command, as split by the Racket reader, or #f if there was a split failure"
        "-  delete-caller => Thunk that removes the call or eval command that ran this code")
      "\n")
@@ -235,12 +233,9 @@
 (define (evaluation-ctx client message trick-ctx args)
   `((message-contents . ,(rc:message-content message))
     (string-args      . ,args)
-    (shlex-args       . ,(thunk
-                          (with-handlers ([exn:fail:read:eof? #f])
-                            (shlex:split args))))
     (read-args        . ,(thunk
                           (with-handlers ([exn:fail:read? #f])
-                            (let loop ([data (open-input-string string-args)])
+                            (let loop ([data (open-input-string args)])
                               (let ([val (read data)])
                                 (if (eof-object? val) null (cons val (loop data))))))))
     (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message))))

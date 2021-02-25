@@ -3,5 +3,4 @@
 (define version "0.1")
 (define deps '("base"
                "racket-cord"
-               "shlex"
                "threading-lib"))
