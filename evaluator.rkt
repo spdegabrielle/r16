@@ -67,13 +67,18 @@
 (define (init-evaluator definitions)
   (parameterize ([sandbox-output 'string]
                  [sandbox-error-output 'string]
+                 [sandbox-eval-limits '(30 20)]
                  [sandbox-propagate-exceptions #f]
                  [sandbox-reader (language-morph-reader definitions)])
     (make-evaluator 'racket)))
 
 (define (run code definitions)
   (let* ((evaluator (init-evaluator definitions))
-         (results (call-with-values (thunk (evaluator code)) list))
+         (results (call-with-values
+                    (thunk
+                      (with-handlers ([(const #t) identity])
+                        (evaluator code)))
+                    list))
          (stdout (get-output evaluator))
          (stderr (get-error-output evaluator)))
     (kill-evaluator evaluator)
