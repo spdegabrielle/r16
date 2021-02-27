@@ -7,10 +7,8 @@
   (prefix-in db: "trick-db.rkt")
 
   (only-in racket/serialize serializable-struct/versions)
-  (only-in "evaluator.rkt" (run ev:run)))
-
-; williewillus#8490, maintainer, & Vazkii#0999, whose server we hope to run this in
-(define bot-admins '("132691314784337920" "156785583723642881"))
+  (only-in "evaluator.rkt" (run ev:run))
+  threading)
 
 (define prefix "!rkt ")
 (define trick-prefix "!!")
@@ -44,13 +42,17 @@
     #f]))
 
 (define (can-modify? message trick)
-  (let ([author-id (message-author-id message)])
+  (let ([author-id (message-author-id message)]
+        [perms (bitwise-ior rc:permission-administrator
+                            rc:permission-manage-guild)])
     (or
       (equal? (trick-author trick) author-id)
-      ; TODO: Put a check here for Administrator/Manage Members:
-      ; Use HTTP to turn message to channel to guild obj, search author ID to get member
-      ; Then iter owned roles and lookup in guild to bit-check perms
-      (member author-id bot-admins))))
+      (let ([memb (rc:message-member message)])
+        (and~> memb
+               rc:guild-member-permissions
+               string->number
+               (bitwise-and perms)
+               ((negate zero?)))))))
 
 (define (strip-backticks code)
   (let ([groups (regexp-match #px"```(\\w+\n)?(.+)```|`(.+)`" code)])
