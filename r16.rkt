@@ -87,6 +87,24 @@
                 (http:delete-message client (rc:message-channel-id message) (rc:message-id message)))
               (loop))))))
 
+(define typing-thread
+  (thread
+   (thunk
+    (let loop ([data #hash()])
+      (match-let ([(list val client channel) (thread-receive)])
+        (let* ([key (cons (rc:user-id (rc:client-user client)) channel)]
+               [newval (+ val (hash-ref data key 0))])
+          (unless (zero? newval)
+            (with-handlers ([exn:fail? (const #f)]) (http:trigger-typing-indicator client channel)))
+          (loop (hash-set data key newval))))))))
+
+(define (with-typing-indicator client message thunk)
+  (let ([payload (list client (rc:message-channel-id message))])
+    (thread-send typing-thread (cons 1 payload))
+    (let ([result (call-with-values thunk list)])
+      (thread-send typing-thread (cons -1 payload))
+      (apply values result))))
+
 
 (define (make-trick body message parent)
   (trick (if parent (trick-author parent) (message-author-id message))
@@ -97,7 +115,8 @@
 (define (run-snippet client db message code)
   (let ([code (strip-backticks code)]
         [text (rc:message-content message)])
-    (ev:run code (evaluation-ctx client message (db:get-trick-context db message) "" #f))))
+    (with-typing-indicator client message
+      (thunk (ev:run code (evaluation-ctx client message (db:get-trick-context db message) "" #f))))))
 
 (define (register-trick client db message text)
   (check-trick-prereqs
@@ -117,14 +136,15 @@
       (if trick
         (begin
           (db:update-trick! context name (lambda (t) (set-trick-invocations! t (add1 (trick-invocations t))) t) (const #t))
-          (ev:run
-            (trick-body trick)
-            (evaluation-ctx
-              client
-              message
-              context
-              (or body "")
-              #f)))
+          (with-typing-indicator client message
+            (thunk (ev:run
+              (trick-body trick)
+              (evaluation-ctx
+                client
+                message
+                context
+                (or body "")
+                #f)))))
         (~a "Trick " name " doesn't exist!")))))
 
 (define (update-trick client db message text)
@@ -268,6 +288,7 @@
             (parent-context   . ,parent-ctx))])
     (placeholder-set! placeholder (make-hash ctx))
     (cons (make-reader-graph ctx) '(threading))))
+
 
 (define command-table
   `(("about"    . ,(const about))
