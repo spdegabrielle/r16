@@ -181,14 +181,18 @@
           (codeblock-quote (trick-body trick)))
         (~a "Trick " name " doesn't exist!")))))
 
+(define about
+  (string-join
+   `("R16 -- A Racket Trick Bot for Discord"
+     ,(~a "Running on Racket " (version))
+     "Brought to you by williewillus, Alwinfy, and Eutro"
+     "Project Homepage: https://sr.ht/~williewillus/r16")
+   "\n"))
+
 (define help
   (string-replace
     (string-join
-     `("R16 -- A Racket Trick Bot for Discord"
-       ,(~a "Running on Racket " (version))
-       "Brought to you by williewillus, Alwinfy, and Eutro"
-       ""
-       "Commands:"
+     `("Commands:"
        "-  PREFIXeval <code> => evaluate <code> as a Racket form"
        "-  PREFIXregister <name> <code> => register <code> as a trick with name <name>"
        "-  PREFIXcall <name> ... => invoke the named trick, evaluating its source code verbatim in a fresh sandbox"
@@ -258,7 +262,8 @@
     ("call"     . ,call-trick)
     ("update"   . ,update-trick)
     ("delete"   . ,delete-trick)
-    ("help"     . ,(thunk* help))
+    ("about"    . ,(const about))
+    ("help"     . ,(const help))
     ("popular"  . ,popular-tricks)
     ("save"     . ,(lambda (client db msg text) (if (db:commit-db! db) "Saved" "Nothing to save or error saving")))
     ("show"     . ,show-trick)))
