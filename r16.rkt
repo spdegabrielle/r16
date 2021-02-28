@@ -8,6 +8,7 @@
 
   (only-in racket/serialize serializable-struct/versions)
   (only-in "evaluator.rkt" (run ev:run))
+  (only-in net/url get-pure-port string->url)
   threading)
 
 (define prefix "!rkt ")
@@ -243,6 +244,8 @@
        "-  message-contents => Full text of the invoking command, as a string"
        "-  string-args => Message contents after the bot command, as a string"
        "-  read-args => Thunk that returns message contents after the bot command, as split by the Racket reader, or #f if there was a split failure"
+       "-  emote-lookup => Function that takes an emote name and returns its ID (or #f if none exists)"
+       "-  emote-image => Function that takes an emote snowflake and returns its PNG data (or #f if no such emote exists)"
        "-  delete-caller => Thunk that removes the call or eval command that ran this code"
        "-  parent-context => Mapping of the above symbols for the trick calling this one, or #f if this trick is top-level")
      "\n")
@@ -272,6 +275,45 @@
         (apply values vals))
       (raise (make-exn:fail:contract (~a "Trick " name " doesn't exist!"))))))
 
+; Cache for (emote-lookup string)
+(define emote-lookup-cache (make-hash))
+; Cache for checking whether an emote is valid
+(define emote-whitelist-cache (make-hash))
+; Cache for (emote-image id)
+(define emote-data-cache (make-hash))
+(define emote-lookup-thread
+  (thread
+   (thunk
+    (let loop ()
+      (let ([message (thread-receive)])
+        ; TODO this only uses PNG, racket-cord needs to expose an animated field on emoji
+        (channel-put (cdr message)
+                     (with-handlers ([exn:fail? (const #f)])
+                       (~> (~a "https://cdn.discordapp.com/emojis/" (car message) ".png?v=1")
+                           string->url
+                           get-pure-port
+                           port->bytes))))
+      (loop)))))
+(define/contract ((lookup-emote client) id)
+  (-> rc:client? (-> string? (or/c bytes? #f)))
+  (hash-ref! emote-data-cache id
+   (thunk
+    (and 
+      ; Is this an emote that this bot has encountered?
+      ; If not, don't bother requesting it and just return #f
+      (set-member? (hash-ref! emote-whitelist-cache client
+                     ; COFU a set of all emotes in the lookup table
+                     (thunk (~> emote-lookup-cache
+                              (hash-ref client)
+                              hash-values
+                              list->set)))
+                   id)
+      (let ([ch (make-channel)])
+        (thread-send emote-lookup-thread (cons id ch))
+        (let ([data (channel-get ch)])
+          ; If empty byte string returned, return #f
+          (and data (positive? (bytes-length data)) data)))))))
+
 (define (evaluation-ctx client message trick-ctx args parent-ctx)
   (let* ([placeholder (make-placeholder #f)]
          [ctx
@@ -282,6 +324,12 @@
                                     (let loop ([data (open-input-string args)])
                                       (let ([val (read data)])
                                         (if (eof-object? val) null (cons val (loop data))))))))
+            (emote-lookup     . ,(curry hash-ref
+                                  (hash-ref! emote-lookup-cache client
+                                   (thunk (for*/hash ([(_ guild) (rc:client-guilds client)]
+                                                      [emoji     (rc:guild-emojis guild)])
+                                            (values (rc:emoji-name emoji) (rc:emoji-id emoji)))))))
+            (emote-image      . ,(lookup-emote client))
             (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message))))
             (make-attachment  . ,make-attachment)
             (call-trick       . ,(call-subtrick client trick-ctx message placeholder))
