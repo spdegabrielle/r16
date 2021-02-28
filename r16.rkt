@@ -169,7 +169,7 @@
   (define seconds-in-minute 60)
   (define seconds-in-hour (* 60 60))
   (define seconds-in-day (* 24 60 60))
-  (let*-values ([v (- (current-seconds) start-time)]
+  (let*-values ([(v) (- (current-seconds) start-time)]
                 [(days v) (quotient/remainder v seconds-in-day)]
                 [(hours v) (quotient/remainder v seconds-in-hour)]
                 [(minutes seconds) (quotient/remainder v seconds-in-minute)])
