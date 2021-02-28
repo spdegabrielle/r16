@@ -23,13 +23,6 @@
   (and (rc:message-author message)
        (rc:user-bot (rc:message-author message))))
 
-(define user-cache (make-hash))
-(define (get-user-tag client uid)
-  (hash-ref! user-cache uid
-    (thunk
-      (let ([user (http:get-user client uid)])
-        (format "~a#~a" (rc:user-username user) (rc:user-discriminator user))))))
-
 (define ((contextualizer client) message)
   (let ([channel (http:get-channel client (rc:message-channel-id message))])
     (and (rc:guild-channel? channel) (rc:guild-channel-guild-id channel))))
@@ -195,8 +188,8 @@
                        (take tricks leaderboard-size)
                        tricks))])
           (~a
-            "\n" (add1 i) ". **" (car trick) "**, by " (get-user-tag client (trick-author (cdr trick)))
-            ", invoked **" (trick-invocations (cdr trick)) "**x"))))))
+            "\n" (add1 i) ". **" (car trick) "**, by <@" (trick-author (cdr trick))
+            ">, invoked **" (trick-invocations (cdr trick)) "**x"))))))
 
 (define (show-trick client db message text)
   (check-trick-prereqs
@@ -207,9 +200,9 @@
         (~a
           "Trick **"
           name
-          "**, created by "
-          (get-user-tag client (trick-author trick))
-          ", has been invoked **`"
+          "**, created by <@"
+          (trick-author trick)
+          ">, has been invoked **`"
           (trick-invocations trick)
           "`** times.\n__Source code:__\n"
           (codeblock-quote (trick-body trick)))
