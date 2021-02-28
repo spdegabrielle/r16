@@ -13,6 +13,7 @@
 (define prefix "!rkt ")
 (define trick-prefix "!!")
 (define leaderboard-size 10)
+(define start-time 0)
 
 (define (strip-trim msg prefix)
   (string-trim (substring msg (string-length prefix))))
@@ -144,6 +145,18 @@
       (~a "Successfully removed trick " name "!")
       (~a "Trick " name " doesn't exist, or you can't remove it!"))))
 
+(define (uptime client db message text)
+  (define seconds-in-minute 60)
+  (define seconds-in-hour (* 60 60))
+  (define seconds-in-day (* 24 60 60))
+  (let*-values ([v (- (current-seconds) start-time)]
+                [(days v) (quotient/remainder v seconds-in-day)]
+                [(hours v) (quotient/remainder v seconds-in-hour)]
+                [(minutes seconds) (quotient/remainder v seconds-in-minute)])
+    (~>> (list days hours minutes seconds)
+         (map (lambda (x) (~a #:min-width 2 #:align 'right #:pad-string "0" x)))
+         (string-join _ ":"))))
+
 (define (cmp-tricks lt rt)
   (let ([l (cdr lt)] [r (cdr rt)])
     (if (= (trick-invocations l) (trick-invocations r))
@@ -257,16 +270,17 @@
     (cons (make-reader-graph ctx) '(threading))))
 
 (define command-table
-  `(("eval"     . ,run-snippet)
-    ("register" . ,register-trick)
+  `(("about"    . ,(const about))
     ("call"     . ,call-trick)
-    ("update"   . ,update-trick)
     ("delete"   . ,delete-trick)
-    ("about"    . ,(const about))
+    ("eval"     . ,run-snippet)
     ("help"     . ,(const help))
     ("popular"  . ,popular-tricks)
+    ("register" . ,register-trick)
     ("save"     . ,(lambda (client db msg text) (if (db:commit-db! db) "Saved" "Nothing to save or error saving")))
-    ("show"     . ,show-trick)))
+    ("show"     . ,show-trick)
+    ("update"   . ,update-trick)
+    ("uptime"   . ,uptime)))
 
 (define (parse-command content)
   (cond
@@ -353,6 +367,7 @@
         (printf "[~a] ~a\n" (vector-ref v 0)
                 (vector-ref v 1)))
       (loop))))
+  (set! start-time (current-seconds))
   (rc:start-client (init-client (get-token))))
 
 (module* main #f
