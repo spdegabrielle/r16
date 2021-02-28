@@ -235,7 +235,9 @@
        "-  PREFIXupdate <name> <code> => change the source of the named trick; requires ownership or administrator"
        "-  PREFIXdelete <name> => delete the named trick; requires ownership or administrator and cannot be undone!"
        "-  PREFIXpopular => show a leaderboard of popular tricks"
+       "-  PREFIXabout => show version info"
        "-  PREFIXhelp => show this message"
+       "-  PREFIXuptime => show uptime in dd:hh:mm:ss"
        ""
        "The following data is available in the trick environment:"
        "-  all symbols from the `threading-lib` package (for utility purposes)"
@@ -275,13 +277,15 @@
         (apply values vals))
       (raise (make-exn:fail:contract (~a "Trick " name " doesn't exist!"))))))
 
-; Cache for (emote-lookup string)
+; client -> (emote name -> emote id)
 (define emote-lookup-cache (make-hash))
-; Cache for checking whether an emote is valid
+
+; client -> set of emote ids known by the bot
 (define emote-whitelist-cache (make-hash))
-; Cache for (emote-image id)
-(define emote-data-cache (make-hash))
-(define emote-lookup-thread
+
+; emote id -> bytes
+(define emote-image-cache (make-hash))
+(define emote-image-thread
   (thread
    (thunk
     (let loop ()
@@ -294,9 +298,9 @@
                            get-pure-port
                            port->bytes))))
       (loop)))))
-(define/contract ((lookup-emote client) id)
+(define/contract ((emote-image client) id)
   (-> rc:client? (-> string? (or/c bytes? #f)))
-  (hash-ref! emote-data-cache id
+  (hash-ref! emote-image-cache id
    (thunk
     (and 
       ; Is this an emote that this bot has encountered?
@@ -309,7 +313,7 @@
                               list->set)))
                    id)
       (let ([ch (make-channel)])
-        (thread-send emote-lookup-thread (cons id ch))
+        (thread-send emote-image-thread (cons id ch))
         (let ([data (channel-get ch)])
           ; If empty byte string returned, return #f
           (and data (positive? (bytes-length data)) data)))))))
@@ -329,7 +333,7 @@
                                    (thunk (for*/hash ([(_ guild) (rc:client-guilds client)]
                                                       [emoji     (rc:guild-emojis guild)])
                                             (values (rc:emoji-name emoji) (rc:emoji-id emoji)))))))
-            (emote-image      . ,(lookup-emote client))
+            (emote-image      . ,(emote-image client))
             (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message))))
             (make-attachment  . ,make-attachment)
             (call-trick       . ,(call-subtrick client trick-ctx message placeholder))
