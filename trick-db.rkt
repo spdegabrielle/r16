@@ -1,121 +1,102 @@
 #lang racket
 
 (require
-  (only-in racket-cord message?)
   racket/contract
   racket/hash
   racket/serialize)
 
 (define saveable-trick? serializable?)
 
+; A context id specifies the environment tricks belong to. Most commonly, it is a
+; guild id or DM channel id
+(define context-id? string?)
 (define trick-key? string?)
-; A contextualizer is a function mapping a message to a context key (e.g. guild ID)
-(define contextualizer? (-> message? any))
 ; A permission check is a way to ensure a trick can be modified or removed.
 (define permission-check? (or/c (-> saveable-trick? boolean?) #f))
 
 (provide
+ trickdb?
   (contract-out
     (saveable-trick? (-> any/c boolean?))
-    (trick-context? (-> any/c boolean?))
-    (make-trickdb (-> contextualizer? path-string? trickdb?))
-    (get-trick-context (-> trickdb? message? (or/c trick-context? #f)))
-    (list-tricks (-> trick-context? (listof trick-key?)))
-    (all-tricks (-> trick-context? (listof (cons/c trick-key? saveable-trick?))))
-    (get-trick (-> trick-context? trick-key? (or/c saveable-trick? #f)))
-    (add-trick! (-> trick-context? trick-key? (-> saveable-trick?) boolean?))
-    (update-trick! (-> trick-context? trick-key? (-> saveable-trick? saveable-trick?) permission-check? boolean?))
-    (remove-trick! (-> trick-context? trick-key? permission-check? boolean?))
+    (make-trickdb (-> path-string? trickdb?))
+    (list-tricks (-> trickdb? context-id? (listof trick-key?)))
+    (all-tricks (-> trickdb? context-id? (listof (cons/c trick-key? saveable-trick?))))
+    (get-trick (-> trickdb? context-id? trick-key? (or/c saveable-trick? #f)))
+    (add-trick! (-> trickdb? context-id? trick-key? (-> saveable-trick?) boolean?))
+    (update-trick! (-> trickdb? context-id? trick-key? (-> saveable-trick? saveable-trick?) permission-check? boolean?))
+    (remove-trick! (-> trickdb? context-id? trick-key? permission-check? boolean?))
     (commit-db! (-> trickdb? boolean?))))
 
-; data: guild -> trick-context
-(struct trickdb (data filename contextualizer (dirty #:mutable) lock))
-
-; data: trick-key -> trick
-(struct trick-context (data db))
+; data: context-id -> (trick-key -> trick)
+(struct trickdb (data filename (dirty #:mutable) lock))
 
 (define (serialize-db db)
-  (serialize
-    (hash-map
-      (trickdb-data db)
-      ; Extract just the data portion of a context
-      (lambda (k v) (cons k (trick-context-data v))))))
+  (serialize (hash->list trickdb-data db)))
 
-(define (deserialize-db db data)
-  (make-hash
-    (map
-      (lambda (e) (cons (car e) (trick-context (cdr e) db)))
-      (deserialize data))))
-
-(define (try-read-db db filename default)
+(define (try-read-db filename default)
   (with-handlers ([exn:fail? (lambda (e) (displayln e (current-error-port)) (default))])
-    (deserialize-db db (read (open-input-file filename)))))
+    (make-hash (deserialize (read (open-input-file filename))))))
 
-(define (make-trickdb contextualizer filename)
-  ; Due to the contexts having backreferences for locking, we instantiate the db first and then read in the ctxs
-  (let ((db (trickdb
-              (make-hash)
-              filename
-              contextualizer
-              #f
-              (make-semaphore 1))))
-    (hash-union! (trickdb-data db) (try-read-db db filename make-hash))
-    db))
+(define (make-trickdb filename)
+  (let ([data (try-read-db filename make-hash)])
+    (trickdb
+     data
+     filename
+     #f
+     (make-semaphore 1))))
 
 (define-syntax-rule (with-db-lock db . body)
   (call-with-semaphore (trickdb-lock db) (thunk . body)))
 
-(define (mark-dirty ctx) (set-trickdb-dirty! (trick-context-db ctx) #t))
+(define (mark-dirty db) (set-trickdb-dirty! db #t))
 
-(define (get-trick-context db message)
-  (let ((id ((trickdb-contextualizer db) message)))
-    (and id
-      (with-db-lock db
-        (hash-ref!
-          (trickdb-data db)
-          id
-          (thunk
-            (trick-context (make-hash) db)))))))
+; Note: db lock must be held
+(define (get-submap db context-id)
+  (and context-id
+       (hash-ref!
+        (trickdb-data db)
+        context-id
+        (thunk (make-hash)))))
 
-(define (list-tricks context)
-  (with-db-lock (trick-context-db context)
-    (hash-keys (trick-context-data context))))
+(define (list-tricks db context-id)
+  (with-db-lock db
+    (hash-keys (get-submap db context-id))))
 
-(define (all-tricks context)
-  (with-db-lock (trick-context-db context)
-    (hash->list (trick-context-data context))))
+(define (all-tricks db context-id)
+  (with-db-lock db
+    (hash->list (get-submap db context-id))))
 
-(define (get-trick context name)
-  (with-db-lock (trick-context-db context)
-    (hash-ref (trick-context-data context) name #f)))
+(define (get-trick db context-id name)
+  (with-db-lock db
+    (hash-ref (get-submap db context-id) name #f)))
 
-(define (add-trick! context name thunk)
-  (with-db-lock (trick-context-db context)
-    (let* ((table  (trick-context-data context))
+(define (add-trick! db context-id name thunk)
+  (with-db-lock db
+    (let* ((table  (get-submap db context-id))
            (create (not (hash-has-key? table name))))
       (when create
         (log-info (~a "Trick created: " name))
-        (mark-dirty context)
+        (mark-dirty db)
         (hash-set! table name (thunk)))
       create)))
 
-(define (update-trick! context name thunk perm-check)
-  (with-db-lock (trick-context-db context)
-    (let* ((table  (trick-context-data context))
+(define (update-trick! db context-id name thunk perm-check)
+  (with-db-lock db
+    (let* ((table  (get-submap db context-id))
            (modify (and (hash-has-key? table name) (perm-check (hash-ref table name)))))
       (when modify
         (log-info (~a "Trick updated: " name))
-        (mark-dirty context)
+        (mark-dirty db)
         (hash-set! table name (thunk (hash-ref table name))))
       modify)))
 
-(define (remove-trick! context name perm-check)
-  (with-db-lock (trick-context-db context)
-    (let* ((table  (trick-context-data context))
+(define (remove-trick! db context-id name perm-check)
+  (with-db-lock db
+    (let* ((table  (get-submap db context-id))
            (remove (and (hash-has-key? table name) (perm-check (hash-ref table name)))))
       (when remove
         (log-info (~a "Trick deleted: " name))
-        (mark-dirty context)
+        (mark-dirty db)
         (hash-remove! table name))
       remove)))
 

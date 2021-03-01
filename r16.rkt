@@ -23,7 +23,8 @@
   (and (rc:message-author message)
        (rc:user-bot (rc:message-author message))))
 
-(define (make-db filename) (db:make-trickdb rc:message-guild-id filename))
+(define (context-id message)
+  (or (rc:message-guild-id message) (rc:message-channel-id message)))
 
 (define message-author-id (compose1 rc:user-id rc:message-author))
 
@@ -60,14 +61,12 @@
       (values (substring str 0 index) (string-trim (substring str index)))
       (values str #f))))
 
-(define-syntax-rule (check-trick-prereqs db message text context-out name-out body-out body)
-  (let ([context-out (db:get-trick-context db message)])
-    (if context-out
-      (let-values ([(name-out body-out) (split-once text)])
-        (if (non-empty-string? name-out)
+(define-syntax-rule (check-trick-prereqs message text context-out name-out body-out body)
+  (let ([context-out (context-id message)])
+    (let-values ([(name-out body-out) (split-once text)])
+      (if (non-empty-string? name-out)
           body
-          (~a "Missing the name for the trick!")))
-      (~a "Cannot run tricks for this type of message!"))))
+          (~a "Missing the name for the trick!")))))
 
 (define deleter-thread
   (thread
@@ -103,55 +102,57 @@
          (if parent (trick-invocations parent) 0)))
 
 (define (run-snippet client db message code)
-  (let ([code (strip-backticks code)]
-        [text (rc:message-content message)])
+  (let ([code (strip-backticks code)])
     (with-typing-indicator client message
-      (thunk (ev:run code (evaluation-ctx client message (db:get-trick-context db message) "" #f))))))
+      (thunk (ev:run code (evaluation-ctx client message db (context-id message) "" #f))))))
 
 (define (register-trick client db message text)
   (check-trick-prereqs
-    db message text
-    context name body
+    message text
+    context-id name body
     (cond
       [(not body) (~a "Trick " name " needs a body!")]
-      [(db:add-trick! context name (thunk (make-trick body message #f)))
+      [(db:add-trick! db context-id name (thunk (make-trick body message #f)))
        (~a "Successfully registered trick " name "!")]
       [else (~a "Trick " name " already exists!")])))
 
 (define (call-trick client db message text)
   (check-trick-prereqs
-    db message text
-    context name body
-    (let ([trick (db:get-trick context name)])
+    message text
+    context-id name body
+    (let ([trick (db:get-trick db context-id name)])
       (if trick
         (begin
-          (db:update-trick! context name (lambda (t) (set-trick-invocations! t (add1 (trick-invocations t))) t) (const #t))
+          (db:update-trick! db context-id name
+                            (lambda (t) (set-trick-invocations! t (add1 (trick-invocations t))) t)
+                            (const #t))
           (with-typing-indicator client message
             (thunk (ev:run
               (trick-body trick)
               (evaluation-ctx
                 client
                 message
-                context
+                db
+                context-id
                 (or body "")
                 #f)))))
         (~a "Trick " name " doesn't exist!")))))
 
 (define (update-trick client db message text)
   (check-trick-prereqs
-    db message text
-    context name body
+    message text
+    context-id name body
     (cond
       [(not body) (~a "Trick " name " needs a body!")]
-      [(db:update-trick! context name (curry make-trick body message) (curry can-modify? message))
+      [(db:update-trick! db context-id name (curry make-trick body message) (curry can-modify? message))
        (~a "Successfully updated trick " name "!")]
       [else (~a "Trick " name " doesn't exist, or you can't modify it!")])))
 
 (define (delete-trick client db message text)
   (check-trick-prereqs
-    db message text
-    context name body
-    (if (db:remove-trick! context name (curry can-modify? message))
+    message text
+    context-id name _
+    (if (db:remove-trick! db context-id name (curry can-modify? message))
       (~a "Successfully removed trick " name "!")
       (~a "Trick " name " doesn't exist, or you can't remove it!"))))
 
@@ -174,7 +175,7 @@
       (> (trick-invocations l) (trick-invocations r)))))
 
 (define (popular-tricks client db message text)
-  (let ([tricks (sort (db:all-tricks (db:get-trick-context db message)) cmp-tricks)])
+  (let ([tricks (sort (db:all-tricks db (context-id message)) cmp-tricks)])
     (if (empty? tricks)
       (~a "There aren't any tricks registered in your guild! Use `" prefix "register` to create one.")
       (apply ~a "**Most popular tricks in your guild:**"
@@ -189,9 +190,9 @@
 
 (define (show-trick client db message text)
   (check-trick-prereqs
-    db message text
-    context name _
-    (let ([trick (db:get-trick context name)])
+    message text
+    context-id name _
+    (let ([trick (db:get-trick db context-id name)])
       (if trick
         (~a
           "Trick **"
@@ -245,9 +246,9 @@
 (define/contract (make-attachment data name type)
   (-> bytes? (or/c string? bytes?) (or/c symbol? string? bytes?) http:attachment?)
   (http:attachment data (~a type) name))
-(define/contract ((call-subtrick client trick-ctx message parent-ctx) name arguments)
-  (-> rc:client? db:trick-context? rc:message? any/c (-> (or/c symbol? string?) any/c any))
-  (let ([trick (db:get-trick trick-ctx (~a name))])
+(define/contract ((call-subtrick client db context-id message parent-ctx) name arguments)
+  (-> rc:client? db:trickdb? string? rc:message? any/c (-> (or/c symbol? string?) any/c any))
+  (let ([trick (db:get-trick db context-id (~a name))])
     (if trick
       (match-let
         ([(list stdout vals ... stderr)
@@ -257,7 +258,8 @@
                     (evaluation-ctx
                       client
                       message
-                      trick-ctx
+                      db
+                      context-id
                       (if arguments (~a arguments) "")
                       parent-ctx)))
             list)])
@@ -307,7 +309,7 @@
           ; If empty byte string returned, return #f
           (and data (positive? (bytes-length data)) data)))))))
 
-(define (evaluation-ctx client message trick-ctx args parent-ctx)
+(define (evaluation-ctx client message db context-id args parent-ctx)
   (let* ([placeholder (make-placeholder #f)]
          [ctx
           `((message-contents . ,(rc:message-content message))
@@ -325,7 +327,7 @@
             (emote-image      . ,(emote-image client))
             (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message))))
             (make-attachment  . ,make-attachment)
-            (call-trick       . ,(call-subtrick client trick-ctx message placeholder))
+            (call-trick       . ,(call-subtrick client db context-id message placeholder))
             (parent-context   . ,parent-ctx))])
     (placeholder-set! placeholder (make-hash ctx))
     (cons (make-reader-graph ctx) '(threading))))
@@ -403,7 +405,7 @@
   (let* ([client (rc:make-client token
                                  #:auto-shard #t
                                  #:intents (list rc:intent-guilds rc:intent-guild-messages))]
-         [db     (make-db "tricks.rktd")])
+         [db     (db:make-trickdb "tricks.rktd")])
     (thread
       (thunk
         (let loop ()
