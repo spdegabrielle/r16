@@ -23,11 +23,7 @@
   (and (rc:message-author message)
        (rc:user-bot (rc:message-author message))))
 
-(define ((contextualizer client) message)
-  (let ([channel (http:get-channel client (rc:message-channel-id message))])
-    (and (rc:guild-channel? channel) (rc:guild-channel-guild-id channel))))
-
-(define (make-db client filename) (db:make-trickdb (contextualizer client) filename))
+(define (make-db filename) (db:make-trickdb rc:message-guild-id filename))
 
 (define message-author-id (compose1 rc:user-id rc:message-author))
 
@@ -407,7 +403,7 @@
   (let* ([client (rc:make-client token
                                  #:auto-shard #t
                                  #:intents (list rc:intent-guilds rc:intent-guild-messages))]
-         [db     (make-db client "tricks.rktd")])
+         [db     (make-db "tricks.rktd")])
     (thread
       (thunk
         (let loop ()
