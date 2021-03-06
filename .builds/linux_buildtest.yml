@@ -6,3 +6,5 @@ sources:
 tasks:
   - build: |
       raco pkg install --user --auto --type dir r16
+  - test: |
+      raco test -qt -c r16
