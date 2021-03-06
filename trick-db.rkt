@@ -31,7 +31,7 @@
 (struct trickdb (data filename (dirty #:mutable) lock))
 
 (define (serialize-db db)
-  (serialize (hash->list trickdb-data db)))
+  (serialize (hash->list (trickdb-data db))))
 
 (define (try-read-db filename default)
   (with-handlers ([exn:fail? (lambda (e) (displayln e (current-error-port)) (default))])
