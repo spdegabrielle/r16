@@ -5,4 +5,3 @@
                "racket-cord"
                "sandbox-lib"
                "threading-lib"))
-(define test-omit-paths '("presentation"))
