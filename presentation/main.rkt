@@ -21,16 +21,37 @@ future plans: 1m/if time
    (blank-line)
    (t "Racketfest Amateur Night")
    (t "March 27, 2021")
-   (t "Presented by: Vincent Lee (williewillus), Alwinfy, Benedek Szilvasby (Eutro)")))
+   (t "Presented by: Vincent Lee (williewillus), Alwinfy, Benedek Szilvasy (Eutro)")))
 
 (define (outline)
   "todo")
 
 (define (who-we-are)
-  "todo")
+  (slide
+   #:title "Vincent Lee (williewillus)"
+   (item "New grad from Univ. of Texas at Austin")
+   (item "Favorite languages: Clojure and Rust"))
+  (slide
+   #:title "Alwinfy"
+   (item "TODO"))
+  (slide
+   #:title "Benedek Szilvasy (Eutro)"
+   (item "TODO")))
 
 (define (about-the-project)
-  "todo")
+  (slide
+   #:title "What Is R16?"
+   (item "In one sentence: A Discord Bot for Communal Code Evaluation")
+   'next
+   (item "Focus is on" (it "tricks") ", short saved snippets of code")
+   'next
+   (item "Users can register code as a trick, then recall and execute that code on separate input")
+   (bitmap "helloworld.png"))
+  (slide
+   #:title "Inspiration"
+   (item "A very similar preexisting bot called K9, written by tterrag")
+   (item "Written in Java, trick language is Clojure")
+   (item "TODO")))
 
 (define (tech-racket-cord)
   "todo")
@@ -39,16 +60,24 @@ future plans: 1m/if time
   "todo")
 
 (define (challenges)
-  "todo")
+  (slide
+   #:title "Challenges and Limitations"
+   (item "One OS thread: easy to lock up the bot with heavy compute, even with time limits")
+   (item "Sandbox works" (it "too") "well")))
 
 (define (demos)
   "todo")
 
 (define (future-plans)
-  "todo")
+  (slide
+   #:title "Future Plans"
+   (item "Continue modernization of racket-cord")
+   (item "Persistent evaluation contexts")))
 
 (define (questions)
-  "todo")
+  (slide (big (t "Questions?")))
+  (slide (big (t "Thanks!"))
+         (item "Code: https://git.sr.ht/~williewillus/r16")))
 
 (define (main)
   (title)
