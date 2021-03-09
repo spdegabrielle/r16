@@ -6,3 +6,4 @@
                "sandbox-lib"
                "threading-lib"))
 (define test-omit-paths '("presentation"))
+(define scribblings '(("scribblings/main.scrbl" ())))
