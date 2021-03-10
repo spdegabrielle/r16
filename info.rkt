@@ -4,6 +4,7 @@
 (define deps '("base"
                "racket-cord"
                "sandbox-lib"
+               "slideshow-lib"
                "threading-lib"))
 (define test-omit-paths '("presentation"))
-(define scribblings '(("scribblings/main.scrbl" ())))
+(define scribblings '(("scribblings/r16.scrbl" ())))
