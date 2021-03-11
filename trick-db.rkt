@@ -25,7 +25,7 @@
     (add-trick! (-> trickdb? context-id? trick-key? (-> saveable-trick?) boolean?))
     (update-trick! (-> trickdb? context-id? trick-key? (-> saveable-trick? saveable-trick?) permission-check? boolean?))
     (remove-trick! (-> trickdb? context-id? trick-key? permission-check? boolean?))
-    (commit-db! (-> trickdb? boolean?))))
+    (commit-db! (->* (trickdb?) ((-> any/c jsexpr?) path-string?) boolean?))))
 
 ; data: context-id -> (trick-key -> trick)
 (struct trickdb (data filename (dirty #:mutable) lock))
