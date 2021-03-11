@@ -121,6 +121,8 @@
    #:mutable
    #:transparent)
 
+  (current-logger (make-logger #f #f)) ; suppress stderr output so tests pass on pkgs.racket-lang.org
+
   (test-case "CRUD Smoke test"
     (define context-id 1)
     (define trick-id "trick1")
