@@ -332,6 +332,11 @@
     (placeholder-set! placeholder (make-hash ctx))
     (cons (make-reader-graph ctx) '(threading))))
 
+(define (trick->json trick)
+  (hasheq 'author (trick-author trick)
+          'body (trick-body trick)
+          'created (trick-created trick)
+          'invocations (trick-invocations trick)))
 
 (define command-table
   `(("about"    . ,(const about))
@@ -341,7 +346,7 @@
     ("help"     . ,(const help))
     ("popular"  . ,popular-tricks)
     ("register" . ,register-trick)
-    ("save"     . ,(lambda (client db msg text) (if (db:commit-db! db) "Saved" "Nothing to save or error saving")))
+    ("save"     . ,(lambda (client db msg text) (if (db:commit-db! db trick->json "new_trick_data") "Saved" "Nothing to save or error saving")))
     ("show"     . ,show-trick)
     ("update"   . ,update-trick)
     ("uptime"   . ,uptime)))

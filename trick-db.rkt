@@ -1,8 +1,9 @@
 #lang racket
 
 (require
-  racket/contract
-  racket/serialize)
+ json
+ racket/contract
+ racket/serialize)
 
 (define saveable-trick? serializable?)
 
@@ -99,11 +100,29 @@
         (hash-remove! table name))
       remove)))
 
-(define (commit-db! db)
+(define (save-new-output data trick->json folder)
+  (log-debug "Saving new format data in ~a" folder)
+  (with-handlers ([exn:fail:filesystem:exists? void])
+    (make-directory folder))
+  (hash-for-each
+   data
+   (lambda (guild submap)
+     (define tricks-serialized
+       (make-immutable-hash (hash-map submap (lambda (name trick)
+                                               (cons (string->symbol name) (trick->json trick))))))
+     (call-with-atomic-output-file
+      (build-path folder (~a guild ".json"))
+      (lambda (port _)
+        (write-json tricks-serialized port)
+        (log-debug "new format data written"))))))
+
+(define (commit-db! db [trick->json #f] [folder #f])
   (with-db-lock db
     (and (trickdb-dirty db)
          (with-handlers ((exn:fail? (lambda (e)
                                       (log-error (~a "Error saving tricks: " e)) #f)))
+           (when (and trick->json folder)
+             (save-new-output (trickdb-data db) trick->json folder))
            (call-with-atomic-output-file
             (trickdb-filename db)
             (lambda (port _)
@@ -121,10 +140,13 @@
    #:mutable
    #:transparent)
 
+  (define (fake-trick->json ft)
+    (hasheq 'value (fake-trick-value ft)))
+
   (current-logger (make-logger #f #f)) ; suppress stderr output so tests pass on pkgs.racket-lang.org
 
   (test-case "CRUD Smoke test"
-    (define context-id 1)
+    (define context-id "guild1")
     (define trick-id "trick1")
     (define db (make-trickdb "/tmp/dummy")) ; we aren't reading/writing this db so this doesn't matter
     (check-equal? (list-tricks db context-id) null)
@@ -146,7 +168,7 @@
     (check-equal? (all-tricks db context-id) null))
 
   (test-case "Duplicate and Missing Test"
-    (define context-id 1)
+    (define context-id "guild1")
     (define trick-id "trick1")
     (define db (make-trickdb "/tmp/dummy")) ; we aren't reading/writing this db so this doesn't matter
 
@@ -157,8 +179,8 @@
     (check-false (remove-trick! db context-id "nonexistent-id" (const #t)))))
 
   (test-case "Context Separation Test"
-    (define context-id-1 1)
-    (define context-id-2 2)
+    (define context-id-1 "guild1")
+    (define context-id-2 "guild2")
     (define trick-id "trick1")
     (define db (make-trickdb "/tmp/dummy")) ; we aren't reading/writing this db so this doesn't matter
 
@@ -169,17 +191,26 @@
     (check-equal? (fake-trick-value (get-trick db context-id-2 trick-id)) "bar"))
 
   (test-case "Saving Test"
-    (define context-id-1 1)
-    (define context-id-2 2)
+    (define context-id-1 "guild1")
+    (define context-id-2 "guild2")
     (define trick-id "trick1")
     (define path (make-temporary-file))
+    (define newpath (make-temporary-file "rkttmp~a" 'directory))
     (after
      (let ([db (make-trickdb path)])
        (check-true (add-trick! db context-id-1 trick-id (thunk (fake-trick "foo"))))
        (check-true (add-trick! db context-id-2 trick-id (thunk (fake-trick "bar"))))
-       (check-true (commit-db! db)))
+       (check-true (commit-db! db fake-trick->json newpath)))
      (let ([db (make-trickdb path)])
        (check-equal? (fake-trick-value (get-trick db context-id-1 trick-id)) "foo")
        (check-equal? (fake-trick-value (get-trick db context-id-2 trick-id)) "bar"))
 
-     (delete-file path))))
+     ; check new output
+     (with-input-from-file (build-path newpath (~a context-id-1 ".json"))
+       (thunk (check-equal? (read-json) #hasheq((trick1 . #hasheq((value . "foo")))))))
+     (with-input-from-file (build-path newpath (~a context-id-2 ".json"))
+       (thunk (check-equal? (read-json) #hasheq((trick1 . #hasheq((value . "bar")))))))
+
+     (begin
+       (delete-file path)
+       (delete-directory/files newpath)))))
