@@ -3,7 +3,8 @@
 (require
  json
  racket/contract
- (only-in racket/symbol symbol->immutable-string))
+ (only-in racket/symbol symbol->immutable-string)
+ "log.rkt")
 
 ; A context id specifies the environment tricks belong to. Most commonly, it is a
 ; guild id or DM channel id
@@ -41,7 +42,7 @@
                    (make-hash (hash-map js (lambda (name trick)
                                              (cons (symbol->immutable-string name)
                                                    (json->trick trick))))))
-        (log-info "Loaded ~a tricks from ~a" (hash-count (hash-ref dest context-id)) path))))
+        (log-r16-info "Loaded ~a tricks from ~a" (hash-count (hash-ref dest context-id)) path))))
   (define (load-guild path acc)
     (let ([path (path->string path)])
       (when (string-suffix? path ".json")
@@ -86,7 +87,7 @@
     (let* ((table  (get-submap db context-id))
            (create (not (hash-has-key? table name))))
       (when create
-        (log-info (~a "Trick created: " name))
+        (log-r16-info (~a "Trick created: " name))
         (mark-dirty db)
         (hash-set! table name (thunk)))
       create)))
@@ -96,7 +97,7 @@
     (let* ((table  (get-submap db context-id))
            (modify (and (hash-has-key? table name) (perm-check (hash-ref table name)))))
       (when modify
-        (log-info (~a "Trick updated: " name))
+        (log-r16-info (~a "Trick updated: " name))
         (mark-dirty db)
         (hash-set! table name (thunk (hash-ref table name))))
       modify)))
@@ -106,13 +107,13 @@
     (let* ((table  (get-submap db context-id))
            (remove (and (hash-has-key? table name) (perm-check (hash-ref table name)))))
       (when remove
-        (log-info (~a "Trick deleted: " name))
+        (log-r16-info (~a "Trick deleted: " name))
         (mark-dirty db)
         (hash-remove! table name))
       remove)))
 
 (define (save data trick->json folder)
-  (log-debug "Saving new format data in ~a" folder)
+  (log-r16-debug "Saving data in ~a" folder)
   (with-handlers ([exn:fail:filesystem:exists? void])
     (make-directory folder))
   (hash-for-each
@@ -124,14 +125,13 @@
      (call-with-atomic-output-file
       (build-path folder (~a guild ".json"))
       (lambda (port _)
-        (write-json tricks-serialized port)
-        (log-debug "new format data written"))))))
+        (write-json tricks-serialized port))))))
 
 (define (commit-db! db trick->json)
   (with-db-lock db
     (and (trickdb-dirty db)
          (with-handlers ((exn:fail? (lambda (e)
-                                      (log-error (~a "Error saving tricks: " e)) #f)))
+                                      (log-r16-error (~a "Error saving tricks: " e)) #f)))
            (save (trickdb-data db) trick->json (trickdb-filename db))
            (set-trickdb-dirty! db #f)
            #t))))

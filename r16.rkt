@@ -7,6 +7,7 @@
   (prefix-in db: "trick-db.rkt")
 
   (only-in "evaluator.rkt" (run ev:run))
+  (only-in "log.rkt" r16-logger)
   (only-in net/url get-pure-port string->url)
   threading)
 
@@ -434,14 +435,16 @@
     (close-input-port port)
     token))
 
-(define dr (make-log-receiver rc:discord-logger 'debug))
 
 (define (main)
+  (define discord-receiver (make-log-receiver rc:discord-logger 'debug))
+  (define r16-receiver (make-log-receiver r16-logger 'debug))
   (thread
    (thunk
     (let loop ()
-      (let ([v (sync dr)])
-        (printf "[~a] ~a\n" (vector-ref v 0)
+      (let ([v (sync discord-receiver r16-receiver)])
+        (printf "[~a] ~a\n"
+                (vector-ref v 0)
                 (vector-ref v 1)))
       (loop))))
   (set! start-time (current-seconds))
