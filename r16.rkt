@@ -6,7 +6,6 @@
   (prefix-in http: racket-cord/http)
   (prefix-in db: "trick-db.rkt")
 
-  (only-in racket/serialize serializable-struct/versions)
   (only-in "evaluator.rkt" (run ev:run))
   (only-in net/url get-pure-port string->url)
   threading)
@@ -29,10 +28,11 @@
 
 (define message-author-id (compose1 rc:user-id rc:message-author))
 
-(serializable-struct/versions trick 1 (author body created (invocations #:mutable))
-  ([0
-    (curryr trick 0)
-    #f]))
+(struct trick
+  (author
+   body
+   created
+   [invocations #:mutable]))
 
 (define (can-modify? message trick)
   (let ([author-id (message-author-id message)]
@@ -354,7 +354,7 @@
     ("help"     . ,(const help))
     ("popular"  . ,popular-tricks)
     ("register" . ,register-trick)
-    ("save"     . ,(lambda (client db msg text) (if (db:commit-db! db trick->json new-data-folder) "Saved" "Nothing to save or error saving")))
+    ("save"     . ,(lambda (client db msg text) (if (db:commit-db! db trick->json) "Saved" "Nothing to save or error saving")))
     ("show"     . ,show-trick)
     ("update"   . ,update-trick)
     ("uptime"   . ,uptime)))
@@ -418,12 +418,12 @@
   (let* ([client (rc:make-client token
                                  #:auto-shard #t
                                  #:intents (list rc:intent-guilds rc:intent-guild-messages))]
-         [db     (db:make-trickdb "tricks.rktd" new-data-folder json->trick)])
+         [db     (db:make-trickdb new-data-folder json->trick)])
     (thread
       (thunk
         (let loop ()
           (sleep 30)
-          (db:commit-db! db)
+          (db:commit-db! db trick->json)
           (loop))))
     (rc:on-event 'message-create client (message-received db))
     client))

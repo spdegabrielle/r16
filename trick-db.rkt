@@ -3,73 +3,58 @@
 (require
  json
  racket/contract
- racket/serialize)
-
-(define saveable-trick? serializable?)
+ (only-in racket/symbol symbol->immutable-string))
 
 ; A context id specifies the environment tricks belong to. Most commonly, it is a
 ; guild id or DM channel id
 (define context-id? string?)
 (define trick-key? string?)
 ; A permission check is a way to ensure a trick can be modified or removed.
-(define permission-check? (or/c (-> saveable-trick? boolean?) #f))
+(define permission-check? (or/c (-> any/c boolean?) #f))
 
 (provide
  trickdb?
   (contract-out
-    (saveable-trick? (-> any/c boolean?))
-    (make-trickdb (->* (path-string?) (path-string? (-> jsexpr? any/c)) trickdb?))
+    (make-trickdb (-> path-string? (-> jsexpr? any/c) trickdb?))
     (list-tricks (-> trickdb? context-id? (listof trick-key?)))
-    (all-tricks (-> trickdb? context-id? (listof (cons/c trick-key? saveable-trick?))))
-    (get-trick (-> trickdb? context-id? trick-key? (or/c saveable-trick? #f)))
-    (add-trick! (-> trickdb? context-id? trick-key? (-> saveable-trick?) boolean?))
-    (update-trick! (-> trickdb? context-id? trick-key? (-> saveable-trick? saveable-trick?) permission-check? boolean?))
+    (all-tricks (-> trickdb? context-id? (listof (cons/c trick-key? any/c))))
+    (get-trick (-> trickdb? context-id? trick-key? (or/c any/c #f)))
+    (add-trick! (-> trickdb? context-id? trick-key? (-> any/c) boolean?))
+    (update-trick! (-> trickdb? context-id? trick-key? (-> any/c any/c) permission-check? boolean?))
     (remove-trick! (-> trickdb? context-id? trick-key? permission-check? boolean?))
-    (commit-db! (->* (trickdb?) ((-> any/c jsexpr?) path-string?) boolean?))))
+    (commit-db! (-> trickdb? (-> any/c jsexpr?) boolean?))))
 
 ; data: context-id -> (trick-key -> trick)
 (struct trickdb (data filename (dirty #:mutable) lock))
 
-(define (serialize-db db)
-  (serialize (hash->list (trickdb-data db))))
-
-(define (try-read-db port)
-  (make-hash (deserialize (read port))))
-
-(define (load-data new-data-path json->trick)
+(define (load-data dir json->trick)
   (define (load-tricks path dest)
-    (define context-id (string-trim path ".json" #:left #f))
+    (define context-id (string-trim (path->string (last (explode-path path)))
+                                    ".json"
+                                    #:left? #f))
     (call-with-input-file* path
       (lambda (port)
         (define js (read-json port))
         (unless (hash? js)
           (error "Data file was not a json object"))
         (hash-set! dest context-id
-                   (make-hash (hash-map (lambda (name trick) (cons name (json->trick trick))))))
+                   (make-hash (hash-map js (lambda (name trick)
+                                             (cons (symbol->immutable-string name)
+                                                   (json->trick trick))))))
         (log-info "Loaded ~a tricks from ~a" (hash-count (hash-ref dest context-id)) path))))
   (define (load-guild path acc)
-    (when (string-suffix? path ".json")
-      (load-tricks path acc))
+    (let ([path (path->string path)])
+      (when (string-suffix? path ".json")
+        (load-tricks path acc)))
     acc)
-  (foldl load-guild (make-hash) (directory-list new-data-path)))
+  (foldl load-guild (make-hash) (directory-list dir #:build? #t)))
 
-(define (load-data-legacy path)
-  (with-handlers ([exn:fail? (lambda (e) (log-error (~a e)) (make-hash))])
-    (call-with-input-file* path try-read-db)))
-
-(define (make-trickdb filename [new-data-path #f] [json->trick #f])
-  (let ([data (if (and new-data-path json->trick)
-                  (with-handlers ([exn:fail?
-                                   (lambda (e)
-                                     (log-warning "Falling back to legacy data load because: ~a" e)
-                                     (load-data-legacy filename))])
-                    (load-data new-data-path json->trick))
-                  (load-data-legacy filename))])
-    (trickdb
-     data
-     filename
-     #f
-     (make-semaphore 1))))
+(define (make-trickdb path json->trick)
+  (trickdb
+   (load-data path json->trick)
+   path
+   #f
+   (make-semaphore 1)))
 
 (define-syntax-rule (with-db-lock db . body)
   (call-with-semaphore (trickdb-lock db) (thunk . body)))
@@ -126,7 +111,7 @@
         (hash-remove! table name))
       remove)))
 
-(define (save-new-output data trick->json folder)
+(define (save data trick->json folder)
   (log-debug "Saving new format data in ~a" folder)
   (with-handlers ([exn:fail:filesystem:exists? void])
     (make-directory folder))
@@ -142,25 +127,19 @@
         (write-json tricks-serialized port)
         (log-debug "new format data written"))))))
 
-(define (commit-db! db [trick->json #f] [folder #f])
+(define (commit-db! db trick->json)
   (with-db-lock db
     (and (trickdb-dirty db)
          (with-handlers ((exn:fail? (lambda (e)
                                       (log-error (~a "Error saving tricks: " e)) #f)))
-           (when (and trick->json folder)
-             (save-new-output (trickdb-data db) trick->json folder))
-           (call-with-atomic-output-file
-            (trickdb-filename db)
-            (lambda (port _)
-              (write (serialize-db db) port)
-              (set-trickdb-dirty! db #f)
-              (log-debug "db flushed")
-              #t))))))
+           (save (trickdb-data db) trick->json (trickdb-filename db))
+           (set-trickdb-dirty! db #f)
+           #t))))
 
 (module* test #f
   (require rackunit)
 
-  (serializable-struct
+  (struct
    fake-trick
    (value)
    #:mutable
@@ -172,84 +151,75 @@
   (define (json->fake-trick js)
     (fake-trick (hash-ref js 'value)))
 
-  (current-logger (make-logger #f #f)) ; suppress stderr output so tests pass on pkgs.racket-lang.org
-
   (test-case "CRUD Smoke test"
     (define context-id "guild1")
     (define trick-id "trick1")
-    (define db (make-trickdb "/tmp/dummy")) ; we aren't reading/writing this db so this doesn't matter
-    (check-equal? (list-tricks db context-id) null)
-    (check-equal? (all-tricks db context-id) null)
+    (define path (make-temporary-file "rkttmp~a" 'directory))
+    (define db (make-trickdb path json->fake-trick))
 
-    (check-true (add-trick! db context-id trick-id (thunk (fake-trick "foo"))))
-    (check-equal? (fake-trick-value (get-trick db context-id trick-id)) "foo")
+    (after 
+     (check-equal? (list-tricks db context-id) null)
+     (check-equal? (all-tricks db context-id) null)
 
-    (check-equal? (length (list-tricks db context-id)) 1)
-    (check-equal? (length (all-tricks db context-id)) 1)
+     (check-true (add-trick! db context-id trick-id (thunk (fake-trick "foo"))))
+     (check-equal? (fake-trick-value (get-trick db context-id trick-id)) "foo")
 
-    (check-true (update-trick! db context-id trick-id
-                               (const (fake-trick "bar"))
-                               (const #t)))
-    (check-equal? (fake-trick-value (get-trick db context-id trick-id)) "bar")
+     (check-equal? (length (list-tricks db context-id)) 1)
+     (check-equal? (length (all-tricks db context-id)) 1)
 
-    (check-true (remove-trick! db context-id trick-id (const #t)))
-    (check-equal? (list-tricks db context-id) null)
-    (check-equal? (all-tricks db context-id) null))
+     (check-true (update-trick! db context-id trick-id
+                                (const (fake-trick "bar"))
+                                (const #t)))
+     (check-equal? (fake-trick-value (get-trick db context-id trick-id)) "bar")
+
+     (check-true (remove-trick! db context-id trick-id (const #t)))
+     (check-equal? (list-tricks db context-id) null)
+     (check-equal? (all-tricks db context-id) null)
+
+     (delete-directory/files path)))
 
   (test-case "Duplicate and Missing Test"
     (define context-id "guild1")
     (define trick-id "trick1")
-    (define db (make-trickdb "/tmp/dummy")) ; we aren't reading/writing this db so this doesn't matter
+    (define path (make-temporary-file "rkttmp~a" 'directory))
+    (define db (make-trickdb path json->fake-trick))
 
-    (check-true (add-trick! db context-id trick-id (thunk (fake-trick "foo"))))
-    (check-false (add-trick! db context-id trick-id (thunk (fake-trick "foo2"))))
+    (after
+     (check-true (add-trick! db context-id trick-id (thunk (fake-trick "foo"))))
+     (check-false (add-trick! db context-id trick-id (thunk (fake-trick "foo2"))))
 
-    (check-false (update-trick! db context-id "nonexistent-id" values (const #t))
-    (check-false (remove-trick! db context-id "nonexistent-id" (const #t)))))
+     (check-false (update-trick! db context-id "nonexistent-id" values (const #t))
+                  (check-false (remove-trick! db context-id "nonexistent-id" (const #t))))
+
+     (delete-directory/files path)))
 
   (test-case "Context Separation Test"
     (define context-id-1 "guild1")
     (define context-id-2 "guild2")
     (define trick-id "trick1")
-    (define db (make-trickdb "/tmp/dummy")) ; we aren't reading/writing this db so this doesn't matter
+    (define path (make-temporary-file "rkttmp~a" 'directory))
+    (define db (make-trickdb path json->fake-trick))
 
-    (check-true (add-trick! db context-id-1 trick-id (thunk (fake-trick "foo"))))
-    (check-true (add-trick! db context-id-2 trick-id (thunk (fake-trick "bar"))))
-
-    (check-equal? (fake-trick-value (get-trick db context-id-1 trick-id)) "foo")
-    (check-equal? (fake-trick-value (get-trick db context-id-2 trick-id)) "bar"))
-
-  (test-case "Saving Test (old format)"
-    (define context-id-1 "guild1")
-    (define context-id-2 "guild2")
-    (define trick-id "trick1")
-    (define path (make-temporary-file))
     (after
-     (let ([db (make-trickdb path)])
-       (check-true (add-trick! db context-id-1 trick-id (thunk (fake-trick "foo"))))
-       (check-true (add-trick! db context-id-2 trick-id (thunk (fake-trick "bar"))))
-       (check-true (commit-db! db)))
-     (let ([db (make-trickdb path)])
-       (check-equal? (fake-trick-value (get-trick db context-id-1 trick-id)) "foo")
-       (check-equal? (fake-trick-value (get-trick db context-id-2 trick-id)) "bar"))
+     (check-true (add-trick! db context-id-1 trick-id (thunk (fake-trick "foo"))))
+     (check-true (add-trick! db context-id-2 trick-id (thunk (fake-trick "bar"))))
 
-     (delete-file path)))
+     (check-equal? (fake-trick-value (get-trick db context-id-1 trick-id)) "foo")
+     (check-equal? (fake-trick-value (get-trick db context-id-2 trick-id)) "bar")
 
-  (test-case "Saving Test (new format)"
+     (delete-directory/files path)))
+
+  (test-case "Saving Test"
     (define context-id-1 "guild1")
     (define context-id-2 "guild2")
     (define trick-id "trick1")
-    (define legacy-file (make-temporary-file))
     (define path (make-temporary-file "rkttmp~a" 'directory))
     (after
-     (let ([db (make-trickdb legacy-file path json->fake-trick)])
+     (let ([db (make-trickdb path json->fake-trick)])
        (check-true (add-trick! db context-id-1 trick-id (thunk (fake-trick "foo"))))
        (check-true (add-trick! db context-id-2 trick-id (thunk (fake-trick "bar"))))
-       (check-true (commit-db! db fake-trick->json path)))
-     (let ([db (make-trickdb legacy-file path json->fake-trick)])
+       (check-true (commit-db! db fake-trick->json)))
+     (let ([db (make-trickdb path json->fake-trick)])
        (check-equal? (fake-trick-value (get-trick db context-id-1 trick-id)) "foo")
        (check-equal? (fake-trick-value (get-trick db context-id-2 trick-id)) "bar"))
-
-     (begin
-       (delete-file legacy-file)
-       (delete-directory/files path)))))
+     (delete-directory/files path))))
