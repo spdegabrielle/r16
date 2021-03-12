@@ -15,6 +15,7 @@
 (define trick-prefix "!!")
 (define leaderboard-size 10)
 (define start-time 0)
+(define new-data-folder "new_trick_data")
 
 (define (strip-trim msg prefix)
   (string-trim (substring msg (string-length prefix))))
@@ -338,6 +339,13 @@
           'created (trick-created trick)
           'invocations (trick-invocations trick)))
 
+(define (json->trick json)
+  (trick
+   (hash-ref json 'author)
+   (hash-ref json 'body)
+   (hash-ref json 'created)
+   (hash-ref json 'invocations)))
+
 (define command-table
   `(("about"    . ,(const about))
     ("call"     . ,call-trick)
@@ -346,7 +354,7 @@
     ("help"     . ,(const help))
     ("popular"  . ,popular-tricks)
     ("register" . ,register-trick)
-    ("save"     . ,(lambda (client db msg text) (if (db:commit-db! db trick->json "new_trick_data") "Saved" "Nothing to save or error saving")))
+    ("save"     . ,(lambda (client db msg text) (if (db:commit-db! db trick->json new-data-folder) "Saved" "Nothing to save or error saving")))
     ("show"     . ,show-trick)
     ("update"   . ,update-trick)
     ("uptime"   . ,uptime)))
@@ -410,7 +418,7 @@
   (let* ([client (rc:make-client token
                                  #:auto-shard #t
                                  #:intents (list rc:intent-guilds rc:intent-guild-messages))]
-         [db     (db:make-trickdb "tricks.rktd")])
+         [db     (db:make-trickdb "tricks.rktd" new-data-folder json->trick)])
     (thread
       (thunk
         (let loop ()

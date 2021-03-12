@@ -18,7 +18,7 @@
  trickdb?
   (contract-out
     (saveable-trick? (-> any/c boolean?))
-    (make-trickdb (-> path-string? trickdb?))
+    (make-trickdb (->* (path-string?) (path-string? (-> jsexpr? any/c)) trickdb?))
     (list-tricks (-> trickdb? context-id? (listof trick-key?)))
     (all-tricks (-> trickdb? context-id? (listof (cons/c trick-key? saveable-trick?))))
     (get-trick (-> trickdb? context-id? trick-key? (or/c saveable-trick? #f)))
@@ -36,9 +36,35 @@
 (define (try-read-db port)
   (make-hash (deserialize (read port))))
 
-(define (make-trickdb filename)
-  (let ([data (with-handlers ([exn:fail? (lambda (e) (log-error (~a e)) (make-hash))])
-                (call-with-input-file* filename try-read-db))])
+(define (load-data new-data-path json->trick)
+  (define (load-tricks path dest)
+    (define context-id (string-trim path ".json" #:left #f))
+    (call-with-input-file* path
+      (lambda (port)
+        (define js (read-json port))
+        (unless (hash? js)
+          (error "Data file was not a json object"))
+        (hash-set! dest context-id
+                   (make-hash (hash-map (lambda (name trick) (cons name (json->trick trick))))))
+        (log-info "Loaded ~a tricks from ~a" (hash-count (hash-ref dest context-id)) path))))
+  (define (load-guild path acc)
+    (when (string-suffix? path ".json")
+      (load-tricks path acc))
+    acc)
+  (foldl load-guild (make-hash) (directory-list new-data-path)))
+
+(define (load-data-legacy path)
+  (with-handlers ([exn:fail? (lambda (e) (log-error (~a e)) (make-hash))])
+    (call-with-input-file* path try-read-db)))
+
+(define (make-trickdb filename [new-data-path #f] [json->trick #f])
+  (let ([data (if (and new-data-path json->trick)
+                  (with-handlers ([exn:fail?
+                                   (lambda (e)
+                                     (log-warning "Falling back to legacy data load because: ~a" e)
+                                     (load-data-legacy filename))])
+                    (load-data new-data-path json->trick))
+                  (load-data-legacy filename))])
     (trickdb
      data
      filename
@@ -143,6 +169,9 @@
   (define (fake-trick->json ft)
     (hasheq 'value (fake-trick-value ft)))
 
+  (define (json->fake-trick js)
+    (fake-trick (hash-ref js 'value)))
+
   (current-logger (make-logger #f #f)) ; suppress stderr output so tests pass on pkgs.racket-lang.org
 
   (test-case "CRUD Smoke test"
@@ -190,27 +219,37 @@
     (check-equal? (fake-trick-value (get-trick db context-id-1 trick-id)) "foo")
     (check-equal? (fake-trick-value (get-trick db context-id-2 trick-id)) "bar"))
 
-  (test-case "Saving Test"
+  (test-case "Saving Test (old format)"
     (define context-id-1 "guild1")
     (define context-id-2 "guild2")
     (define trick-id "trick1")
     (define path (make-temporary-file))
-    (define newpath (make-temporary-file "rkttmp~a" 'directory))
     (after
      (let ([db (make-trickdb path)])
        (check-true (add-trick! db context-id-1 trick-id (thunk (fake-trick "foo"))))
        (check-true (add-trick! db context-id-2 trick-id (thunk (fake-trick "bar"))))
-       (check-true (commit-db! db fake-trick->json newpath)))
+       (check-true (commit-db! db)))
      (let ([db (make-trickdb path)])
        (check-equal? (fake-trick-value (get-trick db context-id-1 trick-id)) "foo")
        (check-equal? (fake-trick-value (get-trick db context-id-2 trick-id)) "bar"))
 
-     ; check new output
-     (with-input-from-file (build-path newpath (~a context-id-1 ".json"))
-       (thunk (check-equal? (read-json) #hasheq((trick1 . #hasheq((value . "foo")))))))
-     (with-input-from-file (build-path newpath (~a context-id-2 ".json"))
-       (thunk (check-equal? (read-json) #hasheq((trick1 . #hasheq((value . "bar")))))))
+     (delete-file path)))
+
+  (test-case "Saving Test (new format)"
+    (define context-id-1 "guild1")
+    (define context-id-2 "guild2")
+    (define trick-id "trick1")
+    (define legacy-file (make-temporary-file))
+    (define path (make-temporary-file "rkttmp~a" 'directory))
+    (after
+     (let ([db (make-trickdb legacy-file path json->fake-trick)])
+       (check-true (add-trick! db context-id-1 trick-id (thunk (fake-trick "foo"))))
+       (check-true (add-trick! db context-id-2 trick-id (thunk (fake-trick "bar"))))
+       (check-true (commit-db! db fake-trick->json path)))
+     (let ([db (make-trickdb legacy-file path json->fake-trick)])
+       (check-equal? (fake-trick-value (get-trick db context-id-1 trick-id)) "foo")
+       (check-equal? (fake-trick-value (get-trick db context-id-2 trick-id)) "bar"))
 
      (begin
-       (delete-file path)
-       (delete-directory/files newpath)))))
+       (delete-file legacy-file)
+       (delete-directory/files path)))))
