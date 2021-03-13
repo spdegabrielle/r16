@@ -6,5 +6,8 @@
                "sandbox-lib"
                "slideshow-lib"
                "threading-lib"))
+(define build-deps '("racket-doc"
+                     "rackunit-lib"
+                     "scribble-lib"))
 (define test-omit-paths '("presentation"))
 (define scribblings '(("scribblings/r16.scrbl" ())))
