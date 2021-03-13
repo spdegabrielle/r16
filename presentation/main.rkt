@@ -23,9 +23,6 @@ future plans: 1m/if time
    (t "March 27, 2021")
    (t "Presented by: Vincent Lee (williewillus), Alwinfy, Benedek Szilvasy (Eutro)")))
 
-(define (outline)
-  "todo")
-
 (define (who-we-are)
   (slide
    #:title "Vincent Lee (williewillus)"
@@ -33,10 +30,10 @@ future plans: 1m/if time
    (item "Favorite languages: Clojure and Rust"))
   (slide
    #:title "Alwinfy"
-   (item "TODO"))
+   (item "TODO alwinfy"))
   (slide
    #:title "Benedek Szilvasy (Eutro)"
-   (item "TODO")))
+   (item "TODO eutro")))
 
 (define (about-the-project)
   (slide
@@ -51,10 +48,18 @@ future plans: 1m/if time
    #:title "Inspiration"
    (item "A very similar preexisting bot called K9, written by tterrag")
    (item "Written in Java, trick language is Clojure")
-   (item "TODO")))
+   (item "Explored Racket as an alternative due to strong built-in sandboxing model"))
+  (slide
+   #:title "Stats"
+   (item "Lines of Code (March 13)")
+   (bitmap "codecount.png")))
 
 (define (tech-racket-cord)
-  "todo")
+  (slide
+   #:title "Tech: Racket-Cord"
+   (item "The underlying Discord library used by R16")
+   (item "Not updated since 2017, many parts have rotted")
+   (item "TODO willie")))
 
 (define (tech-evaluator)
   "todo")
@@ -63,10 +68,14 @@ future plans: 1m/if time
   (slide
    #:title "Challenges and Limitations"
    (item "One OS thread: easy to lock up the bot with heavy compute, even with time limits")
-   (item "Sandbox works" (it "too") "well")))
+   (item "Sandbox works" (it "too") "well TODO eutro")
+   (item "Dedicate time to fixing racket-cord")
+   (item "TODO willie")))
 
 (define (demos)
-  "todo")
+  (slide
+   #:title "Demos"
+   (item "TODO alwinfy")))
 
 (define (future-plans)
   (slide
@@ -81,7 +90,6 @@ future plans: 1m/if time
 
 (define (main)
   (title)
-  (outline)
   (who-we-are)
   (about-the-project)
   (tech-racket-cord)
