@@ -158,7 +158,7 @@
        (~a "Successfully removed trick " name "!")
        (~a "Trick " name " doesn't exist, or you can't remove it!"))))
 
-(define (uptime client db message text)
+(define (uptime)
   (define seconds-in-minute 60)
   (define seconds-in-hour (* 60 60))
   (define seconds-in-day (* 24 60 60))
@@ -169,6 +169,10 @@
     (~>> (list days hours minutes seconds)
          (map (lambda (x) (~a #:min-width 2 #:align 'right #:pad-string "0" x)))
          (string-join _ ":"))))
+
+(define (stats client db message text)
+  (~a "Uptime (dd:hh:mm:ss): " (uptime))
+  (~a "Bytes in use: " (current-memory-use)))
 
 (define (cmp-tricks lt rt)
   (let ([l (cdr lt)] [r (cdr rt)])
@@ -231,7 +235,7 @@
       "PREFIX**popular**:  show a leaderboard of popular tricks"
       "PREFIX**about**:  show version info"
       "PREFIX**help**:  show this message"
-      "PREFIX**uptime**:  show uptime in dd:hh:mm:ss"
+      "PREFIX**stats**:  show operational stats"
       ""
       "For documentation on what is available in the trick environment, please see the R16 documentation:"
       "https://docs.racket-lang.org/r16/index.html")
@@ -352,7 +356,7 @@
     ("save"     . ,(lambda (client db msg text) (if (db:commit-db! db trick->json) "Saved" "Nothing to save or error saving")))
     ("show"     . ,show-trick)
     ("update"   . ,update-trick)
-    ("uptime"   . ,uptime)))
+    ("stats"   . ,stats)))
 
 (define (parse-command content)
   (cond
