@@ -3,9 +3,9 @@
 (require racket/contract racket/sandbox syntax/strip-context)
 
 (provide
-  definitions?
-  (contract-out
-   [run (string? definitions? . -> . any)]))
+ definitions?
+ (contract-out
+  [run (string? definitions? . -> . any)]))
 
 (define definitions? (cons/c (listof (cons/c symbol? any/c))
                              (listof module-path?)))
@@ -75,10 +75,10 @@
 (define (run code definitions)
   (let* ((evaluator (init-evaluator definitions))
          (results (call-with-values
-                    (thunk
-                      (with-handlers ([(const #t) identity])
-                        (evaluator code)))
-                    list))
+                   (thunk
+                    (with-handlers ([(const #t) identity])
+                      (evaluator code)))
+                   list))
          (stdout (get-output evaluator))
          (stderr (get-error-output evaluator)))
     (kill-evaluator evaluator)

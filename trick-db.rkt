@@ -15,15 +15,15 @@
 
 (provide
  trickdb?
-  (contract-out
-    (make-trickdb (-> path-string? (-> jsexpr? any/c) trickdb?))
-    (list-tricks (-> trickdb? context-id? (listof trick-key?)))
-    (all-tricks (-> trickdb? context-id? (listof (cons/c trick-key? any/c))))
-    (get-trick (-> trickdb? context-id? trick-key? (or/c any/c #f)))
-    (add-trick! (-> trickdb? context-id? trick-key? (-> any/c) boolean?))
-    (update-trick! (-> trickdb? context-id? trick-key? (-> any/c any/c) permission-check? boolean?))
-    (remove-trick! (-> trickdb? context-id? trick-key? permission-check? boolean?))
-    (commit-db! (-> trickdb? (-> any/c jsexpr?) boolean?))))
+ (contract-out
+  (make-trickdb (-> path-string? (-> jsexpr? any/c) trickdb?))
+  (list-tricks (-> trickdb? context-id? (listof trick-key?)))
+  (all-tricks (-> trickdb? context-id? (listof (cons/c trick-key? any/c))))
+  (get-trick (-> trickdb? context-id? trick-key? (or/c any/c #f)))
+  (add-trick! (-> trickdb? context-id? trick-key? (-> any/c) boolean?))
+  (update-trick! (-> trickdb? context-id? trick-key? (-> any/c any/c) permission-check? boolean?))
+  (remove-trick! (-> trickdb? context-id? trick-key? permission-check? boolean?))
+  (commit-db! (-> trickdb? (-> any/c jsexpr?) boolean?))))
 
 ; data: context-id -> (trick-key -> trick)
 (struct trickdb (data filename (dirty #:mutable) lock))
@@ -140,10 +140,10 @@
   (require rackunit)
 
   (struct
-   fake-trick
-   (value)
-   #:mutable
-   #:transparent)
+    fake-trick
+    (value)
+    #:mutable
+    #:transparent)
 
   (define (fake-trick->json ft)
     (hasheq 'value (fake-trick-value ft)))

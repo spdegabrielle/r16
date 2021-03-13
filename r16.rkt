@@ -2,14 +2,14 @@
 #lang racket
 
 (require
-  (prefix-in rc: racket-cord)
-  (prefix-in http: racket-cord/http)
-  (prefix-in db: "trick-db.rkt")
+ (prefix-in rc: racket-cord)
+ (prefix-in http: racket-cord/http)
+ (prefix-in db: "trick-db.rkt")
 
-  (only-in "evaluator.rkt" (run ev:run))
-  (only-in "log.rkt" r16-logger)
-  (only-in net/url get-pure-port string->url)
-  threading)
+ (only-in "evaluator.rkt" (run ev:run))
+ (only-in "log.rkt" r16-logger)
+ (only-in net/url get-pure-port string->url)
+ threading)
 
 (define prefix "!rkt ")
 (define trick-prefix "!!")
@@ -40,13 +40,13 @@
         [perms (bitwise-ior rc:permission-administrator
                             rc:permission-manage-guild)])
     (or
-      (equal? (trick-author trick) author-id)
-      (let ([memb (rc:message-member message)])
-        (and~> memb
-               rc:guild-member-permissions
-               string->number
-               (bitwise-and perms)
-               ((negate zero?)))))))
+     (equal? (trick-author trick) author-id)
+     (let ([memb (rc:message-member message)])
+       (and~> memb
+              rc:guild-member-permissions
+              string->number
+              (bitwise-and perms)
+              ((negate zero?)))))))
 
 (define (strip-backticks code)
   (let ([groups (regexp-match #px"```(\\w+\n)?(.+)```|`(.+)`" code)])
@@ -60,8 +60,8 @@
 (define (split-once str)
   (let ([index (index-where (string->list str) char-whitespace?)])
     (if index
-      (values (substring str 0 index) (string-trim (substring str index)))
-      (values str #f))))
+        (values (substring str 0 index) (string-trim (substring str index)))
+        (values str #f))))
 
 (define-syntax-rule (check-trick-prereqs message text context-out name-out body-out body)
   (let ([context-out (context-id message)])
@@ -110,53 +110,53 @@
 
 (define (register-trick client db message text)
   (check-trick-prereqs
-    message text
-    context-id name body
-    (cond
-      [(not body) (~a "Trick " name " needs a body!")]
-      [(db:add-trick! db context-id name (thunk (make-trick body message #f)))
-       (~a "Successfully registered trick " name "!")]
-      [else (~a "Trick " name " already exists!")])))
+   message text
+   context-id name body
+   (cond
+     [(not body) (~a "Trick " name " needs a body!")]
+     [(db:add-trick! db context-id name (thunk (make-trick body message #f)))
+      (~a "Successfully registered trick " name "!")]
+     [else (~a "Trick " name " already exists!")])))
 
 (define (call-trick client db message text)
   (check-trick-prereqs
-    message text
-    context-id name body
-    (let ([trick (db:get-trick db context-id name)])
-      (if trick
-        (begin
-          (db:update-trick! db context-id name
-                            (lambda (t) (set-trick-invocations! t (add1 (trick-invocations t))) t)
-                            (const #t))
-          (with-typing-indicator client message
-            (thunk (ev:run
-              (trick-body trick)
-              (evaluation-ctx
-                client
-                message
-                db
-                context-id
-                (or body "")
-                #f)))))
-        (~a "Trick " name " doesn't exist!")))))
+   message text
+   context-id name body
+   (let ([trick (db:get-trick db context-id name)])
+     (if trick
+         (begin
+           (db:update-trick! db context-id name
+                             (lambda (t) (set-trick-invocations! t (add1 (trick-invocations t))) t)
+                             (const #t))
+           (with-typing-indicator client message
+             (thunk (ev:run
+                     (trick-body trick)
+                     (evaluation-ctx
+                      client
+                      message
+                      db
+                      context-id
+                      (or body "")
+                      #f)))))
+         (~a "Trick " name " doesn't exist!")))))
 
 (define (update-trick client db message text)
   (check-trick-prereqs
-    message text
-    context-id name body
-    (cond
-      [(not body) (~a "Trick " name " needs a body!")]
-      [(db:update-trick! db context-id name (curry make-trick body message) (curry can-modify? message))
-       (~a "Successfully updated trick " name "!")]
-      [else (~a "Trick " name " doesn't exist, or you can't modify it!")])))
+   message text
+   context-id name body
+   (cond
+     [(not body) (~a "Trick " name " needs a body!")]
+     [(db:update-trick! db context-id name (curry make-trick body message) (curry can-modify? message))
+      (~a "Successfully updated trick " name "!")]
+     [else (~a "Trick " name " doesn't exist, or you can't modify it!")])))
 
 (define (delete-trick client db message text)
   (check-trick-prereqs
-    message text
-    context-id name _
-    (if (db:remove-trick! db context-id name (curry can-modify? message))
-      (~a "Successfully removed trick " name "!")
-      (~a "Trick " name " doesn't exist, or you can't remove it!"))))
+   message text
+   context-id name _
+   (if (db:remove-trick! db context-id name (curry can-modify? message))
+       (~a "Successfully removed trick " name "!")
+       (~a "Trick " name " doesn't exist, or you can't remove it!"))))
 
 (define (uptime client db message text)
   (define seconds-in-minute 60)
@@ -173,30 +173,30 @@
 (define (cmp-tricks lt rt)
   (let ([l (cdr lt)] [r (cdr rt)])
     (if (= (trick-invocations l) (trick-invocations r))
-      (string>? (trick-created l) (trick-created r))
-      (> (trick-invocations l) (trick-invocations r)))))
+        (string>? (trick-created l) (trick-created r))
+        (> (trick-invocations l) (trick-invocations r)))))
 
 (define (popular-tricks client db message text)
   (let ([tricks (sort (db:all-tricks db (context-id message)) cmp-tricks)])
     (if (empty? tricks)
-      (~a "There aren't any tricks registered in your guild! Use `" prefix "register` to create one.")
-      (apply ~a "**Most popular tricks in your guild:**"
-        (for/list ([(trick i)
-                    (in-indexed
-                     (if (> (length tricks) leaderboard-size)
-                       (take tricks leaderboard-size)
-                       tricks))])
-          (~a
-            "\n" (add1 i) ". **" (car trick) "**, by <@" (trick-author (cdr trick))
-            ">, invoked **" (trick-invocations (cdr trick)) "**x"))))))
+        (~a "There aren't any tricks registered in your guild! Use `" prefix "register` to create one.")
+        (apply ~a "**Most popular tricks in your guild:**"
+               (for/list ([(trick i)
+                           (in-indexed
+                            (if (> (length tricks) leaderboard-size)
+                                (take tricks leaderboard-size)
+                                tricks))])
+                 (~a
+                  "\n" (add1 i) ". **" (car trick) "**, by <@" (trick-author (cdr trick))
+                  ">, invoked **" (trick-invocations (cdr trick)) "**x"))))))
 
 (define (show-trick client db message text)
   (check-trick-prereqs
-    message text
-    context-id name _
-    (let ([trick (db:get-trick db context-id name)])
-      (if trick
-        (~a
+   message text
+   context-id name _
+   (let ([trick (db:get-trick db context-id name)])
+     (if trick
+         (~a
           "Trick **"
           name
           "**, created by <@"
@@ -205,7 +205,7 @@
           (trick-invocations trick)
           "`** times.\n__Source code:__\n"
           (codeblock-quote (trick-body trick)))
-        (~a "Trick " name " doesn't exist!")))))
+         (~a "Trick " name " doesn't exist!")))))
 
 (define about
   (string-join
@@ -217,26 +217,26 @@
 
 (define help
   (string-replace
-    (string-join
-     `("Commands:"
-       "PREFIX**eval** [_code_]:  evaluate [_code_] as a Racket form"
-       "PREFIX**call** [_name_] ...:  invoke the trick [_name_], evaluating its source code in a fresh sandbox"
-       "!![_trickname_]:  shorthand for !rkt call [_trickname_]"
-       ""
-       "PREFIX**register** [_name_] [_code_]:  register [_code_] as a trick with name [_name_]"
-       "PREFIX**show** [_name_]:  show metadata and source for the trick [_name_]"
-       "PREFIX**update** [_name_] [_code_]:  change the source of the trick [_name_]; requires ownership or administrator"
-       "PREFIX**delete** [_name_]:  delete the trick [_name_]; requires ownership or administrator and cannot be undone!"
-       ""
-       "PREFIX**popular**:  show a leaderboard of popular tricks"
-       "PREFIX**about**:  show version info"
-       "PREFIX**help**:  show this message"
-       "PREFIX**uptime**:  show uptime in dd:hh:mm:ss"
-       ""
-       "For documentation on what is available in the trick environment, please see the R16 documentation:"
-       "https://docs.racket-lang.org/r16/index.html")
-     "\n")
-    "PREFIX" prefix))
+   (string-join
+    `("Commands:"
+      "PREFIX**eval** [_code_]:  evaluate [_code_] as a Racket form"
+      "PREFIX**call** [_name_] ...:  invoke the trick [_name_], evaluating its source code in a fresh sandbox"
+      "!![_trickname_]:  shorthand for !rkt call [_trickname_]"
+      ""
+      "PREFIX**register** [_name_] [_code_]:  register [_code_] as a trick with name [_name_]"
+      "PREFIX**show** [_name_]:  show metadata and source for the trick [_name_]"
+      "PREFIX**update** [_name_] [_code_]:  change the source of the trick [_name_]; requires ownership or administrator"
+      "PREFIX**delete** [_name_]:  delete the trick [_name_]; requires ownership or administrator and cannot be undone!"
+      ""
+      "PREFIX**popular**:  show a leaderboard of popular tricks"
+      "PREFIX**about**:  show version info"
+      "PREFIX**help**:  show this message"
+      "PREFIX**uptime**:  show uptime in dd:hh:mm:ss"
+      ""
+      "For documentation on what is available in the trick environment, please see the R16 documentation:"
+      "https://docs.racket-lang.org/r16/index.html")
+    "\n")
+   "PREFIX" prefix))
 
 (define/contract (make-attachment data name type)
   (-> bytes? (or/c string? bytes?) (or/c symbol? string? bytes?) http:attachment?)
@@ -245,23 +245,23 @@
   (-> rc:client? db:trickdb? string? rc:message? any/c (-> (or/c symbol? string?) any/c any))
   (let ([trick (db:get-trick db context-id (~a name))])
     (if trick
-      (match-let
-        ([(list stdout vals ... stderr)
-          (call-with-values
-            (thunk (ev:run
-                    (trick-body trick)
-                    (evaluation-ctx
-                      client
-                      message
-                      db
-                      context-id
-                      (if arguments (~a arguments) "")
-                      parent-ctx)))
-            list)])
-        (write-string stdout)
-        (unless (void? stderr) (write-string stderr (current-error-port)))
-        (apply values vals))
-      (raise (make-exn:fail:contract (~a "Trick " name " doesn't exist!"))))))
+        (match-let
+            ([(list stdout vals ... stderr)
+              (call-with-values
+               (thunk (ev:run
+                       (trick-body trick)
+                       (evaluation-ctx
+                        client
+                        message
+                        db
+                        context-id
+                        (if arguments (~a arguments) "")
+                        parent-ctx)))
+               list)])
+          (write-string stdout)
+          (unless (void? stderr) (write-string stderr (current-error-port)))
+          (apply values vals))
+        (raise (make-exn:fail:contract (~a "Trick " name " doesn't exist!"))))))
 
 ; client -> (emote name -> emote id)
 (define emote-lookup-cache (make-hash))
@@ -286,23 +286,24 @@
       (loop)))))
 (define/contract ((emote-image client) id)
   (-> rc:client? (-> string? (or/c bytes? #f)))
-  (hash-ref! emote-image-cache id
+  (hash-ref!
+   emote-image-cache id
    (thunk
     (and 
-      ; Is this an emote that this bot has encountered?
-      ; If not, don't bother requesting it and just return #f
-      (set-member? (hash-ref! emote-whitelist-cache client
-                     ; COFU a set of all emotes in the lookup table
-                     (thunk (~> emote-lookup-cache
-                              (hash-ref client)
-                              hash-values
-                              list->set)))
-                   id)
-      (let ([ch (make-channel)])
-        (thread-send emote-image-thread (cons id ch))
-        (let ([data (channel-get ch)])
-          ; If empty byte string returned, return #f
-          (and data (positive? (bytes-length data)) data)))))))
+     ; Is this an emote that this bot has encountered?
+     ; If not, don't bother requesting it and just return #f
+     (set-member? (hash-ref! emote-whitelist-cache client
+                             ; COFU a set of all emotes in the lookup table
+                             (thunk (~> emote-lookup-cache
+                                        (hash-ref client)
+                                        hash-values
+                                        list->set)))
+                  id)
+     (let ([ch (make-channel)])
+       (thread-send emote-image-thread (cons id ch))
+       (let ([data (channel-get ch)])
+         ; If empty byte string returned, return #f
+         (and data (positive? (bytes-length data)) data)))))))
 
 (define (evaluation-ctx client message db context-id args parent-ctx)
   (let* ([placeholder (make-placeholder #f)]
@@ -315,10 +316,10 @@
                                       (let ([val (read data)])
                                         (if (eof-object? val) null (cons val (loop data))))))))
             (emote-lookup     . ,(curry hash-ref
-                                  (hash-ref! emote-lookup-cache client
-                                   (thunk (for*/hash ([(_ guild) (rc:client-guilds client)]
-                                                      [emoji     (rc:guild-emojis guild)])
-                                            (values (rc:emoji-name emoji) (rc:emoji-id emoji)))))))
+                                        (hash-ref! emote-lookup-cache client
+                                                   (thunk (for*/hash ([(_ guild) (rc:client-guilds client)]
+                                                                      [emoji     (rc:guild-emojis guild)])
+                                                            (values (rc:emoji-name emoji) (rc:emoji-id emoji)))))))
             (emote-image      . ,(emote-image client))
             (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message))))
             (make-attachment  . ,make-attachment)
@@ -360,14 +361,14 @@
      (cons call-trick (strip-trim content trick-prefix))]
     ; If prefix, find the command or fall through
     [(and
-       (string-prefix? content prefix)
-       (let ([content (strip-trim content prefix)])
-         (ormap
-           (lambda (pair)
-             (match-let ([(cons cmdname func) pair])
-               (and (string-prefix? content cmdname)
-                    (cons func (strip-trim content cmdname)))))
-           command-table)))]
+      (string-prefix? content prefix)
+      (let ([content (strip-trim content prefix)])
+        (ormap
+         (lambda (pair)
+           (match-let ([(cons cmdname func) pair])
+             (and (string-prefix? content cmdname)
+                  (cons func (strip-trim content cmdname)))))
+         command-table)))]
     ; Return falsey value for func
     [else (cons #f content)]))
 
@@ -377,9 +378,9 @@
 (define (truncate-string str cap)
   (let ([len (string-length str)])
     (if (> len cap)
-      (let* ([slicepos (- cap slice-size)] [restsize (- len slicepos)])
-        (format "~a... [~a more characters]" (substring str 0 slicepos) restsize))
-      str)))
+        (let* ([slicepos (- cap slice-size)] [restsize (- len slicepos)])
+          (format "~a... [~a more characters]" (substring str 0 slicepos) restsize))
+        str)))
 
 (define (empty-string? s)
   (and (string? s) (= (string-length s) 0)))
@@ -414,11 +415,11 @@
                                  #:intents (list rc:intent-guilds rc:intent-guild-messages))]
          [db     (db:make-trickdb new-data-folder json->trick)])
     (thread
-      (thunk
-        (let loop ()
-          (sleep 30)
-          (db:commit-db! db trick->json)
-          (loop))))
+     (thunk
+      (let loop ()
+        (sleep 30)
+        (db:commit-db! db trick->json)
+        (loop))))
     (rc:on-event 'message-create client (message-received db))
     client))
 
