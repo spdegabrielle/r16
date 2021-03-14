@@ -171,8 +171,9 @@
          (string-join _ ":"))))
 
 (define (stats client db message text)
-  (~a "Uptime (dd:hh:mm:ss): " (uptime))
-  (~a "Bytes in use: " (current-memory-use)))
+  (~a "Uptime (dd:hh:mm:ss): " (uptime)
+      "\n"
+      "Bytes in use: " (current-memory-use)))
 
 (define (cmp-tricks lt rt)
   (let ([l (cdr lt)] [r (cdr rt)])
