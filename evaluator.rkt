@@ -73,19 +73,19 @@
     (make-evaluator 'racket)))
 
 (define (run code definitions)
-  (let* ((evaluator (init-evaluator definitions))
-         (results (call-with-values
-                   (thunk
-                    (with-handlers ([(const #t) identity])
-                      (parameterize ([current-environment-variables (make-environment-variables)])
-                        (evaluator code))))
-                   list))
-         (stdout (get-output evaluator))
-         (stderr (get-error-output evaluator)))
-    (kill-evaluator evaluator)
-    (apply values
-           `(,stdout
-             ,@results
-             ,(if (non-empty-string? stderr)
-                  (string-append "\n:warning: stderr:\n" stderr)
-                  (void))))))
+  (parameterize ([current-environment-variables (make-environment-variables)])
+    (let* ((evaluator (init-evaluator definitions))
+           (results (call-with-values
+                     (thunk
+                      (with-handlers ([(const #t) identity])
+                        (evaluator code)))
+                     list))
+           (stdout (get-output evaluator))
+           (stderr (get-error-output evaluator)))
+      (kill-evaluator evaluator)
+      (apply values
+             `(,stdout
+               ,@results
+               ,(if (non-empty-string? stderr)
+                    (string-append "\n:warning: stderr:\n" stderr)
+                    (void)))))))
