@@ -77,7 +77,8 @@
          (results (call-with-values
                    (thunk
                     (with-handlers ([(const #t) identity])
-                      (evaluator code)))
+                      (parameterize ([current-environment-variables (make-environment-variables)])
+                        (evaluator code))))
                    list))
          (stdout (get-output evaluator))
          (stderr (get-error-output evaluator)))

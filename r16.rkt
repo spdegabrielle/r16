@@ -427,13 +427,6 @@
     (rc:on-event 'message-create client (message-received db))
     client))
 
-(define (get-token)
-  (let* ([port (open-input-file "token")]
-         [token (read-line port)])
-    (close-input-port port)
-    token))
-
-
 (define (main)
   (define discord-receiver (make-log-receiver rc:discord-logger 'debug))
   (define r16-receiver (make-log-receiver r16-logger 'debug))
@@ -446,7 +439,7 @@
                 (vector-ref v 1)))
       (loop))))
   (set! start-time (current-seconds))
-  (rc:start-client (init-client (get-token))))
+  (rc:start-client (init-client (getenv "BOT_TOKEN"))))
 
 (module* main #f
   (main))
