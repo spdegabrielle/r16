@@ -2,18 +2,6 @@
 
 (require slideshow/text)
 
-#| Plan
-who we are: 1m
-the project & why it exists: 1m
-technical details:
-  - racket-cord: 1m
-  - evaluator: 3m
-challenges: 2m
-fun stuff: 2m
-questions: 2m
-future plans: 1m/if time
-|#
-
 (define (title)
   (slide
    (big (t "R16"))
@@ -26,8 +14,9 @@ future plans: 1m/if time
 (define (who-we-are)
   (slide
    #:title "Vincent Lee (williewillus)"
-   (item "New grad from Univ. of Texas at Austin")
-   (item "Favorite languages: Clojure and Rust"))
+   (item "2020 grad from Univ. of Texas at Austin")
+   (item "Favorite languages: Clojure and Rust")
+   (item "https://www.vincent-lee.net"))
   (slide
    #:title "Alwinfy"
    (item "TODO alwinfy"))
@@ -59,29 +48,56 @@ future plans: 1m/if time
    #:title "Tech: Racket-Cord"
    (item "The underlying Discord library used by R16")
    (item "Not updated since 2017, many parts have rotted")
-   (item "TODO willie")))
+   (item "Rewrote the websocket gateway management code")
+   (item "Work (slowly) continuing to fix it up")))
 
 (define (tech-evaluator)
-  "todo")
+  (slide
+   #:title "Tech: Evaluator"
+   (item "Leverage Racket's powerful sandboxing capabilities (custodians, namespaces, inspectors)")
+   (item "Uses " (tt "racket/sandbox") " evaluator with some convenience functions bound into the sandbox")))
 
 (define (challenges)
   (slide
    #:title "Challenges and Limitations"
    (item "One OS thread: easy to lock up the bot with heavy compute, even with time limits")
-   (item "Sandbox works" (it "too") "well TODO eutro")
-   (item "Dedicate time to fixing racket-cord")
-   (item "TODO willie")))
+   (item "Significant time needed to fix racket-cord")
+   ; TODO more?
+   ))
 
 (define (demos)
   (slide
-   #:title "Demos"
+   #:title "Demo: instant-tshirt"
+   (item "Author: Alwinfy")
+   (item "Full power of" (tt "pict") "and Racket's other functional drawing libraries is available")
+   (bitmap "tshirt.png"))
+
+  (slide
+   #:title "Demo: fractal"
+   (item "Author: FreeFull")
+   (item "Mathematical beauty right at your Discord channel")
+   (item "TODO: picture"))
+
+  (slide
+   #:title "Demo: brainf*ck"
+   (item "Author: Eutro")
+   (item "Your standard interpreter, but that's not the interesting part...")
+   (item "Other tricks can specify the interpreter as part of their #lang, allowing language-based composition")
+   (bitmap "bf.png"))
+
+  (slide
+   #:title "Demo: doots"
+   (item "Author: Alwinfy")
+   (item "Primitive sound synthesizer with a custom sexpr-based DSL")
    (item "TODO alwinfy")))
 
 (define (future-plans)
   (slide
    #:title "Future Plans"
    (item "Continue modernization of racket-cord")
-   (item "Persistent evaluation contexts")))
+   (item "Persistent evaluation contexts")
+   (subitem "Reuse the same evaluator state across multiple invocations")
+   (subitem "Could be used for chat-based games")))
 
 (define (questions)
   (slide (big (t "Questions?")))
