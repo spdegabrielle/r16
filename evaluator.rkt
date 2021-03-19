@@ -41,8 +41,8 @@
                     (module sandbox-language racket
                       (provide (all-defined-out)
                                #,@(map (curry list 'all-from-out)
-                                       (cdr definitions))
-                               (all-from-out lang))
+                                       (cdr definitions)))
+                      (#%provide (all-from lang))
                       #,(make-definition definitions)
                       ;; require everything else at the end
                       (require lang))
