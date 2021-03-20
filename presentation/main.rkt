@@ -1,6 +1,7 @@
 #lang slideshow/widescreen
 
-(require slideshow/text)
+(require slideshow/text slideshow/play racket/gui)
+
 
 (define (title)
   (slide
@@ -19,7 +20,9 @@
    (item "https://www.vincent-lee.net"))
   (slide
    #:title "Alwinfy"
-   (item "TODO alwinfy"))
+   (item "Makes PRs to random projects")
+   (item "Favorite langs: Haskell, most Lisp dialects, Rust btw")
+   (item "Hacks in Vim"))
   (slide
    #:title "Benedek Szilvasy (Eutro)"
    (item "TODO eutro")))
@@ -69,27 +72,31 @@
   (slide
    #:title "Demo: instant-tshirt"
    (item "Author: Alwinfy")
-   (item "Full power of" (tt "pict") "and Racket's other functional drawing libraries is available")
-   (bitmap "tshirt.png"))
+   'next (item "Full power of" (tt "pict") "and Racket's other functional drawing libraries is available")
+   'next (bitmap "tshirt.png"))
 
   (slide
    #:title "Demo: fractal"
    (item "Author: FreeFull")
-   (item "Mathematical beauty right at your Discord channel")
-   (item "TODO: picture"))
+   'next (item "Mathematical beauty right there in your Discord #botspam channel")
+   'next (item "Use eval to turn any mathematical formula into an \"escape-time fractal\"")
+   (scale (bitmap "fractals.png") 0.4 0.4))
 
   (slide
    #:title "Demo: brainf*ck"
    (item "Author: Eutro")
-   (item "Your standard interpreter, but that's not the interesting part...")
-   (item "Other tricks can specify the interpreter as part of their #lang, allowing language-based composition")
+   'next (item "Your standard interpreter, but that's not the interesting part...")
+   'next (item "Other tricks can specify the interpreter as part of their #lang, allowing language-based composition")
    (bitmap "bf.png"))
 
   (slide
    #:title "Demo: doots"
    (item "Author: Alwinfy")
-   (item "Primitive sound synthesizer with a custom sexpr-based DSL")
-   (item "TODO alwinfy")))
+   'next (item "Primitive sound synthesizer for 8-bit melodies")
+   'next (item "Uses a custom 8-bit \"DSL\"")
+   'next (scale (bitmap "doots2.png") 0.5 0.5)
+   'next (clickback (frame (t "Play audio"))
+    (thunk (play-sound "doot.wav" #t)))))
 
 (define (future-plans)
   (slide
