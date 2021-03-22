@@ -25,7 +25,9 @@
    (item "Hacks in Vim"))
   (slide
    #:title "Benedek Szilvasy (Eutro)"
-   (item "TODO eutro")))
+   (item "Addicted to S-expressions")
+   (item "Favourite languages: Clojure, Racket, French")
+   (item "I prefer Emacs myself")))
 
 (define (about-the-project)
   (slide
@@ -58,7 +60,8 @@
   (slide
    #:title "Tech: Evaluator"
    (item "Leverage Racket's powerful sandboxing capabilities (custodians, namespaces, inspectors)")
-   (item "Uses " (tt "racket/sandbox") " evaluator with some convenience functions bound into the sandbox")))
+   (item "Uses " (tt "racket/sandbox") " evaluator with some convenience functions bound into the sandbox")
+   (item "Custom " (tt "sandbox-reader") " so " (tt "#lang") " can work properly.")))
 
 (define (challenges)
   (slide
@@ -86,7 +89,7 @@
    #:title "Demo: brainf*ck"
    (item "Author: Eutro")
    'next (item "Your standard interpreter, but that's not the interesting part...")
-   'next (item "Other tricks can specify the interpreter as part of their #lang, allowing language-based composition")
+   'next (item "Other tricks can specify the interpreter as part of their " (tt "#lang") ", allowing language-based composition")
    (bitmap "bf.png"))
 
   (slide
