@@ -44,6 +44,11 @@
    (item "Written in Java, trick language is Clojure")
    (item "Explored Racket as an alternative due to strong built-in sandboxing model"))
   (slide
+   #:title "Uses"
+   (item "One-off computations (calculator, etc.)")
+   (item "Dynamic, flexible macros (e.g. " (tt "!!racketdoc") "to search Racket documentation")
+   (item "Educational demonstrations"))
+  (slide
    #:title "Stats"
    (item "Lines of Code (March 13)")
    (bitmap "codecount.png")))
@@ -82,7 +87,7 @@
    #:title "Demo: fractal"
    (item "Author: FreeFull")
    'next (item "Mathematical beauty right there in your Discord #botspam channel")
-   'next (item "Use eval to turn any mathematical formula into an \"escape-time fractal\"")
+   (item "Use eval to turn any mathematical formula into an \"escape-time fractal\"")
    (scale (bitmap "fractals.png") 0.4 0.4))
 
   (slide
@@ -96,10 +101,10 @@
    #:title "Demo: doots"
    (item "Author: Alwinfy")
    'next (item "Primitive sound synthesizer for 8-bit melodies")
-   'next (item "Uses a custom 8-bit \"DSL\"")
+   (item "Uses a custom 8-bit \"DSL\"")
    'next (scale (bitmap "doots2.png") 0.5 0.5)
-   'next (clickback (frame (t "Play audio"))
-    (thunk (play-sound "doot.wav" #t)))))
+   (clickback (frame (t "Play audio"))
+              (thunk (play-sound "doot.wav" #t)))))
 
 (define (future-plans)
   (slide
@@ -107,10 +112,10 @@
    (item "Continue modernization of racket-cord")
    (item "Persistent evaluation contexts")
    (subitem "Reuse the same evaluator state across multiple invocations")
-   (subitem "Could be used for chat-based games")))
+   (subitem "Could be used for chat-based games")
+   (item "Generalize to other chat protocols (Matrix?)")))
 
-(define (questions)
-  (slide (big (t "Questions?")))
+(define (thank)
   (slide (big (t "Thanks!"))
          (item "Code: https://git.sr.ht/~williewillus/r16")))
 
@@ -123,7 +128,7 @@
   (challenges)
   (demos)
   (future-plans)
-  (questions))
+  (thank))
 
 (module* main #f
   (main))
