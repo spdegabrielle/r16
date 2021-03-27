@@ -20,6 +20,6 @@ number to "16".
 ## Usage
 1. Clone this repository
 2. `raco pkg install --user --auto --type dir <clone directory>`
-3. `BOT_TOKEN=<your discord token> racket r16.rkt`
+3. `BOT_TOKEN=<your discord token> racket main.rkt`
 
 Tricks will be saved in a subdirectory of the current working directory in an unspecified format.
