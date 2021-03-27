@@ -7,7 +7,7 @@
  (prefix-in db: "trick-db.rkt")
 
  (only-in "evaluator.rkt" (run ev:run))
- (only-in "log.rkt" r16-logger)
+ "log.rkt"
  (only-in net/url get-pure-port string->url)
  threading)
 
@@ -15,7 +15,6 @@
 (define trick-prefix "!!")
 (define leaderboard-size 10)
 (define start-time 0)
-(define new-data-folder "new_trick_data")
 
 (define (strip-trim msg prefix)
   (string-trim (substring msg (string-length prefix))))
@@ -414,11 +413,12 @@
           (call-with-values (thunk (func client db message content))
                             (curry create-message-with-contents client channel message)))))))
 
-(define (init-client token)
+(define (init-client folder token)
+  (log-r16-info "Storing tricks in ~a" folder)
   (let* ([client (rc:make-client token
                                  #:auto-shard #t
                                  #:intents (list rc:intent-guilds rc:intent-guild-messages))]
-         [db     (db:make-trickdb new-data-folder json->trick)])
+         [db     (db:make-trickdb folder json->trick)])
     (thread
      (thunk
       (let loop ()
@@ -427,6 +427,12 @@
         (loop))))
     (rc:on-event 'message-create client (message-received db))
     client))
+
+(define (get-folder)
+  (define argv (current-command-line-arguments))
+  (if (< (vector-length argv) 1)
+      (raise-user-error "Please pass the directory to be used to store trick data.")
+      (vector-ref argv 0)))
 
 (define (main)
   (define discord-receiver (make-log-receiver rc:discord-logger 'debug))
@@ -440,7 +446,8 @@
                 (vector-ref v 1)))
       (loop))))
   (set! start-time (current-seconds))
-  (rc:start-client (init-client (getenv "BOT_TOKEN"))))
+  (rc:start-client (init-client (get-folder)
+                                (getenv "BOT_TOKEN"))))
 
 (module* main #f
   (main))
