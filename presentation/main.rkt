@@ -17,7 +17,8 @@
    #:title "Vincent Lee (williewillus)"
    (item "2020 grad from Univ. of Texas at Austin")
    (item "Favorite languages: Clojure and Rust")
-   (item "https://www.vincent-lee.net"))
+   (item "https://www.vincent-lee.net")
+   (item "I use Emacs btw"))
   (slide
    #:title "Alwinfy"
    (item "Makes PRs to random projects")
@@ -66,15 +67,15 @@
    #:title "Tech: Evaluator"
    (item "Leverage Racket's powerful sandboxing capabilities (custodians, namespaces, inspectors)")
    (item "Uses " (tt "racket/sandbox") " evaluator with some convenience functions bound into the sandbox")
+   (subitem "Tricks can call each other")
    (item "Custom " (tt "sandbox-reader") " so " (tt "#lang") " can work properly.")))
 
 (define (challenges)
   (slide
    #:title "Challenges and Limitations"
-   (item "One OS thread: easy to lock up the bot with heavy compute, even with time limits")
    (item "Significant time needed to fix racket-cord")
-   ; TODO more?
-   ))
+   (item "Creative limitation: 2000 character message limit")
+   (item "One OS thread: easy to lock up the bot with heavy compute, even with time limits")))
 
 (define (demos)
   (slide
@@ -103,7 +104,7 @@
    'next (item "Primitive sound synthesizer for 8-bit melodies")
    (item "Uses a custom 8-bit \"DSL\"")
    'next (scale (bitmap "doots2.png") 0.5 0.5)
-   (clickback (frame (t "Play audio"))
+   #;(clickback (frame (t "Play audio"))
               (thunk (play-sound "doot.wav" #t)))))
 
 (define (future-plans)
