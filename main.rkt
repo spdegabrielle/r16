@@ -32,6 +32,7 @@
   (author
    body
    created
+   [storage #:mutable]
    [invocations #:mutable]))
 
 (define (can-modify? message trick)
@@ -100,12 +101,13 @@
   (trick (if parent (trick-author parent) (message-author-id message))
          (strip-backticks body)
          (if parent (trick-created parent) (rc:message-timestamp message))
+         (if parent (trick-storage parent) (make-hash))
          (if parent (trick-invocations parent) 0)))
 
 (define (run-snippet client db message code)
   (let ([code (strip-backticks code)])
     (with-typing-indicator client message
-      (thunk (ev:run code (evaluation-ctx client message db (context-id message) "" #f))))))
+      (thunk (ev:run code (evaluation-ctx #f client message db (context-id message) "" #f))))))
 
 (define (register-trick client db message text)
   (check-trick-prereqs
@@ -131,6 +133,7 @@
              (thunk (ev:run
                      (trick-body trick)
                      (evaluation-ctx
+                      trick
                       client
                       message
                       db
@@ -255,6 +258,7 @@
                (thunk (ev:run
                        (trick-body trick)
                        (evaluation-ctx
+                        trick
                         client
                         message
                         db
@@ -266,6 +270,35 @@
           (unless (void? stderr) (write-string stderr (current-error-port)))
           (apply values vals))
         (raise (make-exn:fail:contract (~a "Trick " name " doesn't exist!"))))))
+
+(define (storage-info message type)
+  (match type
+    ['guild   (cons 65536 'global)]
+    ['channel (cons 8192  (rc:message-channel-id message))]
+    ['user    (cons 2048  (message-author-id message))]
+    [_        (cons 0     #f)]))
+
+(define/contract (read-storage trick message type)
+  (-> (or/c trick? #f) rc:message? (or/c 'guild 'channel 'user) any/c)
+  (let ([datum (and~> trick
+                 trick-storage
+                 (hash-ref (cdr (storage-info message type)) #f)
+                 (with-input-from-bytes read)
+                 (with-handlers ([exn:fail:read? (const #f)]) _))])
+    (and (not (eof-object? datum)) datum)))
+(define/contract (write-storage trick message type data)
+  (-> (or/c trick? #f) rc:message? (or/c 'guild 'channel 'user) any/c boolean?)
+  (and
+    trick
+    (match-let ([(cons limit key) (storage-info message type)])
+      (and
+        key
+        (let ([data (with-output-to-bytes (curry write data))])
+          (and
+            (<= (bytes-length data) limit)
+            (begin
+              (hash-set! (trick-storage trick) key data)
+              #t)))))))
 
 ; client -> (emote name -> emote id)
 (define emote-lookup-cache (make-hash))
@@ -309,7 +342,7 @@
          ; If empty byte string returned, return #f
          (and data (positive? (bytes-length data)) data)))))))
 
-(define (evaluation-ctx client message db context-id args parent-ctx)
+(define (evaluation-ctx trick client message db context-id args parent-ctx)
   (let* ([placeholder (make-placeholder #f)]
          [ctx
           `((message-contents . ,(rc:message-content message))
@@ -328,6 +361,9 @@
             (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message))))
             (make-attachment  . ,make-attachment)
             (call-trick       . ,(call-subtrick client db context-id message placeholder))
+            (message-author   . ,(message-author-id message))
+            (read-storage     . ,(curry read-storage trick message))
+            (write-storage    . ,(curry write-storage trick message))
             (parent-context   . ,parent-ctx))])
     (placeholder-set! placeholder (make-hash ctx))
     (cons (make-reader-graph ctx) '(threading))))
@@ -343,6 +379,7 @@
    (hash-ref json 'author)
    (hash-ref json 'body)
    (hash-ref json 'created)
+   (make-hash) ; We purposefully don't save the trick storage due to space limits
    (hash-ref json 'invocations)))
 
 (define command-table
