@@ -428,8 +428,9 @@
 
 (define (create-message-with-contents client channel message . contents)
   (let* ([content (apply ~a #:separator "\n"
-                         (filter-not (disjoin void? http:attachment? empty-string?)
-                                     contents))]
+                         (~>> contents
+                              (map (lambda (x) (if (custom-write? x) "#<redacted>" x)))
+                              (filter-not (disjoin void? http:attachment? empty-string?))))]
          [attachment (findf http:attachment? contents)]
          [content (if (or attachment (non-empty-string? content))
                       (truncate-string content char-cap)
