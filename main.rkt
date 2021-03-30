@@ -281,24 +281,24 @@
 (define/contract (read-storage trick message type)
   (-> (or/c trick? #f) rc:message? (or/c 'guild 'channel 'user) any/c)
   (let ([datum (and~> trick
-                 trick-storage
-                 (hash-ref (cdr (storage-info message type)) #f)
-                 (with-input-from-bytes read)
-                 (with-handlers ([exn:fail:read? (const #f)]) _))])
+                      trick-storage
+                      (hash-ref (cdr (storage-info message type)) #f)
+                      (with-input-from-bytes read)
+                      (with-handlers ([exn:fail:read? (const #f)]) _))])
     (and (not (eof-object? datum)) datum)))
 (define/contract (write-storage trick message type data)
   (-> (or/c trick? #f) rc:message? (or/c 'guild 'channel 'user) any/c boolean?)
   (and
-    trick
-    (match-let ([(cons limit key) (storage-info message type)])
-      (and
-        key
-        (let ([data (with-output-to-bytes (curry write data))])
-          (and
-            (<= (bytes-length data) limit)
-            (begin
-              (hash-set! (trick-storage trick) key data)
-              #t)))))))
+   trick
+   (match-let ([(cons limit key) (storage-info message type)])
+     (and
+      key
+      (let ([data (with-output-to-bytes (curry write data))])
+        (and
+         (<= (bytes-length data) limit)
+         (begin
+           (hash-set! (trick-storage trick) key data)
+           #t)))))))
 
 ; client -> (emote name -> emote id)
 (define emote-lookup-cache (make-hash))
