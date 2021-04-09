@@ -20,6 +20,8 @@ number to "16".
 ## Usage
 1. Clone this repository
 2. `raco pkg install --user --auto --type dir <clone directory>`
-3. `BOT_TOKEN=<your discord token> racket main.rkt`
+3. `BOT_TOKEN=<your discord token> racket main.rkt <directory to save in>`
 
-Tricks will be saved in a subdirectory of the current working directory in an unspecified format.
+Alternatively, you can `raco pkg install r16` and run the bot from the install directory, using `raco pkg update` to update.
+
+NOTE: Currently privilege checking is broken (racket-cord bug). Therefore, tricks will only be deletable by their creators (unless you edit the save data manually).
