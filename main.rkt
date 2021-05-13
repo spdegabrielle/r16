@@ -284,7 +284,7 @@
   (let ([datum (and~> trick
                       trick-storage
                       (hash-ref (cdr (storage-info message type)) #f)
-                      (with-input-from-bytes read)
+                      (with-input-from-string read)
                       (with-handlers ([exn:fail:read? (const #f)]) _))])
     (and (not (eof-object? datum)) datum)))
 (define/contract (write-storage trick message type data)
@@ -294,9 +294,9 @@
    (match-let ([(cons limit key) (storage-info message type)])
      (and
       key
-      (let ([data (with-output-to-bytes (curry write data))])
+      (let ([data (with-output-to-string (curry write data))])
         (and
-         (<= (bytes-length data) limit)
+         (<= (string-length data) limit)
          (begin
            (hash-set! (trick-storage trick) key data)
            #t)))))))
@@ -373,6 +373,7 @@
   (hasheq 'author (trick-author trick)
           'body (trick-body trick)
           'created (trick-created trick)
+          'data (trick-storage trick)
           'invocations (trick-invocations trick)))
 
 (define (json->trick json)
@@ -380,7 +381,7 @@
    (hash-ref json 'author)
    (hash-ref json 'body)
    (hash-ref json 'created)
-   (make-hash) ; We purposefully don't save the trick storage due to space limits
+   (hash-ref json 'data make-hash)
    (hash-ref json 'invocations)))
 
 (define command-table
