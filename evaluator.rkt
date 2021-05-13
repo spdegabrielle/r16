@@ -1,6 +1,6 @@
 #lang racket
 
-(require racket/contract racket/sandbox syntax/strip-context)
+(require racket/contract racket/sandbox racket/exn syntax/strip-context)
 
 (provide
  definitions?
@@ -75,18 +75,27 @@
 (define (run code definitions pass-out?)
   (parameterize ([current-environment-variables (make-environment-variables)])
     (let* ([evaluator (init-evaluator definitions)]
-           [results (call-with-values
-                     (thunk
-                      (with-handlers ([(const #t) identity])
-                        (evaluator code)))
-                     (lambda results
-                       (call-in-sandbox-context
-                        evaluator
-                        (thunk
-                         (for/list ([result (in-list results)])
-                           (if (pass-out? result)
-                               result
-                               (~a result)))))))]
+           [results
+            (call-with-values
+             (thunk
+              (with-handlers ([(const #t) identity])
+                (evaluator code)))
+             (lambda results
+               (call-in-sandbox-context
+                evaluator
+                (thunk
+                 (for/list ([result (in-list results)]
+                            #:when (not (void? result)))
+                   (if (pass-out? result)
+                       result
+                       (with-handlers
+                         ([(const #t)
+                           (lambda (e)
+                             (with-handlers ([(const #t) (const "#<errored>")])
+                               ((error-display-handler)
+                                (exn-message e)
+                                e)))])
+                         (~a result))))))))]
            [stdout (get-output evaluator)]
            [stderr (get-error-output evaluator)])
       (kill-evaluator evaluator)
