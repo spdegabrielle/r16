@@ -107,7 +107,7 @@
 (define (run-snippet client db message code)
   (let ([code (strip-backticks code)])
     (with-typing-indicator client message
-      (thunk (ev:run code (evaluation-ctx #f client message db (context-id message) "" #f))))))
+      (thunk (ev:run code (evaluation-ctx #f client message db (context-id message) "" #f) http:attachment?)))))
 
 (define (register-trick client db message text)
   (check-trick-prereqs
@@ -139,7 +139,8 @@
                       db
                       context-id
                       (or body "")
-                      #f)))))
+                      #f)
+                     http:attachment?))))
          (~a "Trick " name " doesn't exist!")))))
 
 (define (update-trick client db message text)
@@ -423,14 +424,8 @@
           (format "~a... [~a more characters]" (substring str 0 slicepos) restsize))
         str)))
 
-(define (empty-string? s)
-  (and (string? s) (= (string-length s) 0)))
-
-(define (create-message-with-contents client channel message . contents)
-  (let* ([content (apply ~a #:separator "\n"
-                         (~>> contents
-                              (map (lambda (x) (if (custom-write? x) "#<redacted>" x)))
-                              (filter-not (disjoin void? http:attachment? empty-string?))))]
+(define ((create-message-with-contents client channel message) . contents)
+  (let* ([content (apply ~a #:separator "\n" (filter string? contents))]
          [attachment (findf http:attachment? contents)]
          [content (if (or attachment (non-empty-string? content))
                       (truncate-string content char-cap)
@@ -449,7 +444,7 @@
       (match-let ([(cons func content) (parse-command content)])
         (when func
           (call-with-values (thunk (func client db message content))
-                            (curry create-message-with-contents client channel message)))))))
+                            (create-message-with-contents client channel message)))))))
 
 (define (init-client folder token)
   (log-r16-info "Storing tricks in ~a" folder)
