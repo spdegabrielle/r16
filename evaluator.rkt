@@ -80,10 +80,13 @@
                       (with-handlers ([(const #t) identity])
                         (evaluator code)))
                      (lambda results
-                       (for/list ([result (in-list results)])
-                         (if (pass-out? result)
-                             result
-                             (call-in-sandbox-context evaluator (thunk (~a result)))))))]
+                       (call-in-sandbox-context
+                        evaluator
+                        (thunk
+                         (for/list ([result (in-list results)])
+                           (if (pass-out? result)
+                               result
+                               (~a result)))))))]
            [stdout (get-output evaluator)]
            [stderr (get-error-output evaluator)])
       (kill-evaluator evaluator)
