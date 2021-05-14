@@ -5,7 +5,7 @@
 (provide
  definitions?
  (contract-out
-  [run (string? definitions? . -> . any)]))
+  [run (string? definitions? predicate/c . -> . any)]))
 
 (define definitions? (cons/c (listof (cons/c symbol? any/c))
                              (listof module-path?)))
@@ -72,16 +72,20 @@
                  [sandbox-reader (language-morph-reader definitions)])
     (make-evaluator 'racket)))
 
-(define (run code definitions)
+(define (run code definitions pass-out?)
   (parameterize ([current-environment-variables (make-environment-variables)])
-    (let* ((evaluator (init-evaluator definitions))
-           (results (call-with-values
+    (let* ([evaluator (init-evaluator definitions)]
+           [results (call-with-values
                      (thunk
                       (with-handlers ([(const #t) identity])
                         (evaluator code)))
-                     list))
-           (stdout (get-output evaluator))
-           (stderr (get-error-output evaluator)))
+                     (lambda results
+                       (for/list ([result (in-list results)])
+                         (if (pass-out? result)
+                             result
+                             (call-in-sandbox-context evaluator (thunk (~a result)))))))]
+           [stdout (get-output evaluator)]
+           [stderr (get-error-output evaluator)])
       (kill-evaluator evaluator)
       (apply values
              `(,stdout
