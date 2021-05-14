@@ -264,8 +264,7 @@
                         db
                         context-id
                         (if arguments (~a arguments) "")
-                        parent-ctx)
-                       http:attachment?))
+                        parent-ctx)))
                list)])
           (write-string stdout)
           (unless (void? stderr) (write-string stderr (current-error-port)))
