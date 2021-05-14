@@ -265,7 +265,8 @@
                         db
                         context-id
                         (if arguments (~a arguments) "")
-                        parent-ctx)))
+                        parent-ctx)
+                       (const #t)))
                list)])
           (write-string stdout)
           (unless (void? stderr) (write-string stderr (current-error-port)))
