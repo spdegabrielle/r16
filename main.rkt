@@ -9,6 +9,7 @@
  (only-in "evaluator.rkt" (run ev:run))
  "log.rkt"
  (only-in net/url get-pure-port string->url)
+ json
  threading)
 
 (define prefix "!rkt ")
@@ -20,13 +21,14 @@
   (string-trim (substring msg (string-length prefix))))
 
 (define (message-from-bot? message)
-  (and (rc:message-author message)
-       (rc:user-bot (rc:message-author message))))
+  (and (hash-ref message 'author #f)
+       (hash-ref (hash-ref message 'author) 'bot #f)))
 
 (define (context-id message)
-  (or (rc:message-guild-id message) (rc:message-channel-id message)))
+  (or (hash-ref message 'guild_id #f) (hash-ref message 'channel_id #f)))
 
-(define message-author-id (compose1 rc:user-id rc:message-author))
+(define (message-author-id message)
+  (hash-ref (hash-ref message 'author) 'id))
 
 (struct trick
   (author
@@ -41,9 +43,9 @@
                             rc:permission-manage-guild)])
     (or
      (equal? (trick-author trick) author-id)
-     (let ([memb (rc:message-member message)])
+     (let ([memb (hash-ref message 'member)])
        (and~> memb
-              rc:guild-member-permissions
+              (hash-ref _ 'permissions)
               string->number
               (bitwise-and perms)
               ((negate zero?)))))))
@@ -75,7 +77,10 @@
    (thunk (let loop ()
             (match-let ([(cons client message) (thread-receive)])
               (with-handlers ([exn:fail:network? identity])
-                (http:delete-message client (rc:message-channel-id message) (rc:message-id message)))
+                (http:delete-message
+                 client
+                 (hash-ref message 'channel_id)
+                 (hash-ref message 'id)))
               (loop))))))
 
 (define typing-thread
@@ -90,7 +95,7 @@
           (loop (hash-set data key newval))))))))
 
 (define (with-typing-indicator client message thunk)
-  (let ([payload (list client (rc:message-channel-id message))])
+  (let ([payload (list client (hash-ref message 'channel_id))])
     (thread-send typing-thread (cons 1 payload))
     (let ([result (call-with-values thunk list)])
       (thread-send typing-thread (cons -1 payload))
@@ -100,7 +105,7 @@
 (define (make-trick body message parent)
   (trick (if parent (trick-author parent) (message-author-id message))
          (strip-backticks body)
-         (if parent (trick-created parent) (rc:message-timestamp message))
+         (if parent (trick-created parent) (hash-ref message 'timestamp))
          (if parent (trick-storage parent) (make-hash))
          (if parent (trick-invocations parent) 0)))
 
@@ -250,7 +255,7 @@
   (-> bytes? (or/c string? bytes?) (or/c symbol? string? bytes?) http:attachment?)
   (http:attachment data (~a type) name))
 (define/contract ((call-subtrick client db context-id message parent-ctx) name arguments)
-  (-> rc:client? db:trickdb? string? rc:message? any/c (-> (or/c symbol? string?) any/c any))
+  (-> rc:client? db:trickdb? string? jsexpr? any/c (-> (or/c symbol? string?) any/c any))
   (let ([trick (db:get-trick db context-id (~a name))])
     (if trick
         (match-let
@@ -276,12 +281,12 @@
 (define (storage-info message type)
   (match type
     ['guild   (cons 65536 'global)]
-    ['channel (cons 8192  (rc:message-channel-id message))]
+    ['channel (cons 8192  (hash-ref message 'channel_id))]
     ['user    (cons 2048  (message-author-id message))]
     [_        (cons 0     #f)]))
 
 (define/contract (read-storage trick message type)
-  (-> (or/c trick? #f) rc:message? (or/c 'guild 'channel 'user) any/c)
+  (-> (or/c trick? #f) jsexpr? (or/c 'guild 'channel 'user) any/c)
   (let ([datum (and~> trick
                       trick-storage
                       (hash-ref (cdr (storage-info message type)) #f)
@@ -289,7 +294,7 @@
                       (with-handlers ([exn:fail:read? (const #f)]) _))])
     (and (not (eof-object? datum)) datum)))
 (define/contract (write-storage trick message type data)
-  (-> (or/c trick? #f) rc:message? (or/c 'guild 'channel 'user) any/c boolean?)
+  (-> (or/c trick? #f) jsexpr? (or/c 'guild 'channel 'user) any/c boolean?)
   (and
    trick
    (match-let ([(cons limit key) (storage-info message type)])
@@ -347,7 +352,7 @@
 (define (evaluation-ctx trick client message db context-id args parent-ctx)
   (let* ([placeholder (make-placeholder #f)]
          [ctx
-          `((message-contents . ,(rc:message-content message))
+          `((message-contents . ,(hash-ref message 'content))
             (string-args      . ,args)
             (read-args        . ,(thunk
                                   (with-handlers ([exn:fail:read? #f])
@@ -432,16 +437,15 @@
          [content (if (or attachment (non-empty-string? content))
                       (truncate-string content char-cap)
                       "\u200b")]
-         [reference (hash 'message_id (rc:message-id message)
-                          'guild_id (rc:message-guild-id message))])
+         [reference (hash 'message_id (hash-ref message 'id))])
     (http:create-message client channel content
                          #:file attachment
                          #:reply-to reference
                          #:allowed-mentions (hash 'parse '()))))
 
-(define ((message-received db) client message)
-  (let ([content (string-trim (rc:message-content message))]
-        [channel (rc:message-channel-id message)])
+(define ((message-received db) _ws-client client message)
+  (let ([content (string-trim (hash-ref message 'content))]
+        [channel (hash-ref message 'channel_id)])
     (unless (message-from-bot? message)
       (match-let ([(cons func content) (parse-command content)])
         (when func
@@ -460,7 +464,7 @@
         (sleep 30)
         (db:commit-db! db trick->json)
         (loop))))
-    (rc:on-event 'message-create client (message-received db))
+    (rc:on-event 'raw-message-create client (message-received db))
     client))
 
 (define (get-folder)
