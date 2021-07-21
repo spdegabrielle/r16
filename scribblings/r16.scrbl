@@ -60,8 +60,6 @@ This will always return @racket[#f] for the eval command.
                         [data any/c]) boolean?]{
 Writes @racket[data] to the trick's "trick-local storage," overwriting any existing value, and returns whether the write succeeded. All data supported by @racket[write] can be written.
 
-Note that "trick-local storage" is transient and does not currently persist across bot restarts.
-
 A trick's "trick-local storage" can be per-guild, per-channel, or per-user; each type of storage has its own limitation on size:
 @tabular[#:sep @hspace[1]
   `(,(list @bold{Type} @bold{Size Limit})
