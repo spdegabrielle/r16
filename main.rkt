@@ -6,7 +6,7 @@
  (prefix-in http: racket-cord/http)
  (prefix-in db: "trick-db.rkt")
 
- (only-in "evaluator.rkt" (run ev:run))
+ (prefix-in ev: "evaluator.rkt")
  "log.rkt"
  (only-in net/url get-pure-port string->url)
  json
@@ -109,10 +109,21 @@
          (if parent (trick-storage parent) (make-hash))
          (if parent (trick-invocations parent) 0)))
 
+(define (format-run-result rr)
+  (apply values
+         `(,(ev:run-result-stdout rr)
+           ,@(ev:run-result-results rr)
+           ,@(let ([stderr (ev:run-result-stderr rr)])
+               (if stderr
+                   (list (string-append "\n:warning: stderr:\n" stderr))
+                   null)))))
+
 (define (run-snippet client db message code)
   (let ([code (strip-backticks code)])
     (with-typing-indicator client message
-      (thunk (ev:run code (evaluation-ctx #f client message db (context-id message) "" #f) http:attachment?)))))
+      (thunk
+       (format-run-result
+        (ev:run code (evaluation-ctx #f client message db (context-id message) "" #f) http:attachment?))))))
 
 (define (register-trick client db message text)
   (check-trick-prereqs
@@ -135,17 +146,19 @@
                              (lambda (t) (set-trick-invocations! t (add1 (trick-invocations t))) t)
                              (const #t))
            (with-typing-indicator client message
-             (thunk (ev:run
-                     (trick-body trick)
-                     (evaluation-ctx
-                      trick
-                      client
-                      message
-                      db
-                      context-id
-                      (or body "")
-                      #f)
-                     http:attachment?))))
+             (thunk
+              (format-run-result
+               (ev:run
+                (trick-body trick)
+                (evaluation-ctx
+                 trick
+                 client
+                 message
+                 db
+                 context-id
+                 (or body "")
+                 #f)
+                http:attachment?)))))
          (~a "Trick " name " doesn't exist!")))))
 
 (define (update-trick client db message text)
@@ -258,24 +271,23 @@
   (-> rc:client? db:trickdb? string? jsexpr? any/c (-> (or/c symbol? string?) any/c any))
   (let ([trick (db:get-trick db context-id (~a name))])
     (if trick
-        (match-let
-            ([(list stdout vals ... stderr)
-              (call-with-values
-               (thunk (ev:run
-                       (trick-body trick)
-                       (evaluation-ctx
-                        trick
-                        client
-                        message
-                        db
-                        context-id
-                        (if arguments (~a arguments) "")
-                        parent-ctx)
-                       (const #t)))
-               list)])
-          (write-string stdout)
-          (unless (void? stderr) (write-string stderr (current-error-port)))
-          (apply values vals))
+        (let ()
+          (define rr
+            (ev:run
+             (trick-body trick)
+             (evaluation-ctx
+              trick
+              client
+              message
+              db
+              context-id
+              (if arguments (~a arguments) "")
+              parent-ctx)
+             (const #t)))
+          (write-string (ev:run-result-stdout rr))
+          (cond [(ev:run-result-stderr rr)
+                 => (lambda (stderr) (write-string stderr (current-error-port)))])
+          (apply values (ev:run-result-results rr)))
         (raise (make-exn:fail:contract (~a "Trick " name " doesn't exist!"))))))
 
 (define (storage-info message type)
