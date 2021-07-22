@@ -17,6 +17,9 @@
 
 (define recursive-sandbox-call? (make-parameter #f))
 
+(define (unique-sym name)
+  (string->uninterned-symbol (symbol->string name)))
+
 ;; in case it gets overridden, though sandbox-lib doesn't actually take this precaution
 ;; https://github.com/racket/racket/blob/6901f8d5511fd45516aa0a85ae070292e64226cc/pkgs/sandbox-lib/racket/sandbox.rkt#L705
 (define ev
@@ -25,10 +28,11 @@
       (parameterize ([current-eval eval-f])
         (eval expr)))))
 
-(define (make-recursive-evaluator-namespace)
-  (ev '(module recursive-trick racket))
-  (dynamic-require ''recursive-trick #f)
-  (module->namespace ''recursive-trick))
+(define (make-module-namespace name)
+  (define sym (unique-sym name))
+  (ev `(module ,sym racket))
+  (dynamic-require `',sym #f)
+  (module->namespace `',sym))
 
 (define (init-evaluator)
   (parameterize ([sandbox-output 'string]
@@ -39,8 +43,10 @@
     (make-evaluator 'racket)))
 
 (define (code->exprs code)
+  (define port (open-input-string code))
+  (port-count-lines! port)
   (parameterize ([read-accept-lang #t] [read-accept-reader #t])
-    (sequence->list (in-producer read-syntax eof 'trick (open-input-string code)))))
+    (sequence->list (in-producer read-syntax eof 'trick port))))
 
 (struct run-result (stdout stderr results) #:transparent)
 
@@ -90,14 +96,18 @@
 
          (syntax-case* (car exprs) (module) literal-identifier=?
            [(module modname lang body ...)
+            (identifier? #'modname)
             (let ()
               (define varnames (map car (car definitions)))
               (define (eval-quote form) (cons '#%datum form))
               (define varvals (map (compose eval-quote cdr) (car definitions)))
               (define modules (cdr definitions))
+              (define sandbox-language (unique-sym 'sandbox-language))
+              (define modname-sym (unique-sym (syntax-e #'modname)))
+              (define module-name (datum->syntax #'modname modname-sym))
               ;; define a module that provides all of the sandbox definitions
               ;; in addition to those of the requested lang
-              (ev #`(module sandbox-language racket/base
+              (ev #`(module #,sandbox-language racket/base
                       ;; require and provide any defined modules
                       (provide (all-from-out #,@modules))
                       (require #,@modules)
@@ -112,14 +122,14 @@
 
               ;; then evaluate the module with the new language
               (define trick-module
-                #'(module modname 'sandbox-language
+                #`(module #,module-name '#,sandbox-language
                     body ...))
               (ev (replace-context trick-module trick-module))
 
               ;; to actually pass any values out, `r16-main' can be provided,
               ;; otherwise the module is just instantiated for side-effects
 
-              (define qmodname (syntax->datum #''modname))
+              (define qmodname (list 'quote modname-sym))
 
               (define main
                 (dynamic-require
@@ -150,7 +160,7 @@
           (define results
             (parameterize ([current-output-port stdout-port]
                            [current-error-port stderr-port]
-                           [current-namespace (make-recursive-evaluator-namespace)])
+                           [current-namespace (make-module-namespace 'recursive-trick)])
               (call-with-values run-evaluation list)))
           (values (get-output-string stdout-port)
                   results
@@ -257,7 +267,11 @@
       (check-equal? (~> rr run-result-results car) xv)))
 
   (define ((run-fn defs) expr)
-    (apply values (run-result-results (run expr defs any?))))
+    (define rr (run expr defs any?))
+    (display (run-result-stdout rr))
+    (cond [(run-result-stderr rr)
+           => (lambda (stderr) (display stderr (current-error-port)))])
+    (apply values (run-result-results rr)))
 
   (test-case "Recursive Call Test"
     (check-equal?
@@ -315,7 +329,55 @@
                             (namespace-undefine-variable! sym)))
                      empty-defs any?)))))
           any?)
-     (run-result "" #f '(x-value))))
+     (run-result "" #f '(x-value)))
+
+    (check-equal?
+     (let ()
+       (define noop (~s `(void)))
+       (define noop-defs `(((args . "no-args"))))
+       (define foo (~s `(module foo racket
+                          (displayln args)
+                          (run ,noop)
+                          (displayln args))))
+       (define foo-defs `(((run . ,(run-fn noop-defs))
+                           (args . "args"))))
+       (define app (~s `(run ,foo)))
+       (define app-defs `(((run . ,(run-fn foo-defs)))))
+       (run app app-defs any?))
+     (run-result "args\nargs\n" #f '()))
+
+    (check-equal?
+     (let ()
+       (define noop (~s `(void)))
+       (define noop-defs `(((args . "no-args"))))
+       (define foo (~s `(displayln args)
+                       `(run ,noop)
+                       `(displayln args)))
+       (define foo-defs `(((run . ,(run-fn noop-defs))
+                           (args . "args"))))
+       (define app (~s `(run ,foo)))
+       (define app-defs `(((run . ,(run-fn foo-defs)))))
+       (run app app-defs any?))
+     (run-result "args\nargs\n" #f '()))
+
+    (check-equal?
+     (let ()
+       (define selfrec-module
+         (~s `(module selfrec racket
+                (define x value)
+                (displayln x)
+                (recur)
+                (displayln x))))
+       (define selfrec-defs
+         (for/fold ([defs `(((recur . ,void)
+                             (value . top)))])
+                   ([i (in-range 5)])
+           `(((recur . ,(thunk ((run-fn defs) selfrec-module)))
+              (value . ,i)))))
+       (run selfrec-module selfrec-defs any?))
+     (run-result (~a 4 3 2 1 0 'top
+                     'top 0 1 2 3 4 ""
+                     #:separator "\n") #f '())))
 
   (test-case "Exn Test"
     (check-not-false
