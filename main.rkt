@@ -399,7 +399,7 @@
    (hash-ref json 'author)
    (hash-ref json 'body)
    (hash-ref json 'created)
-   (hash-ref json 'data make-hash)
+   (make-hash (hash->list (hash-ref json 'data #hash())))
    (hash-ref json 'invocations)))
 
 (define command-table
