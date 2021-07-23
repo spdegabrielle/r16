@@ -133,7 +133,7 @@
      [(not body) (~a "Trick " name " needs a body!")]
      [(db:add-trick! db context-id name (thunk (make-trick body message #f)))
       (~a "Successfully registered trick " name "!")]
-     [else (~a "Trick " name " already exists!")])))
+     [else (update-trick client db message text)])))
 
 (define (call-trick client db message text)
   (check-trick-prereqs
