@@ -203,17 +203,20 @@
         (> (trick-invocations l) (trick-invocations r)))))
 
 (define (popular-tricks client db message text)
-  (let ([tricks (sort (db:all-tricks db (context-id message)) cmp-tricks)])
+  (let* ([tricks (sort (db:all-tricks db (context-id message)) cmp-tricks)]
+         [pages  (exact-ceiling (/ (length tricks) leaderboard-size))]
+         [pageno (~> text (string->number 10 'number-or-false) (or 1) inexact->exact (max 1) (min pages) sub1)]
+         [page   (drop tricks (* leaderboard-size pageno))])
     (if (empty? tricks)
         (~a "There aren't any tricks registered in your guild! Use `" prefix "register` to create one.")
-        (apply ~a "**Most popular tricks in your guild:**"
-               (for/list ([(trick i)
-                           (in-indexed
-                            (if (> (length tricks) leaderboard-size)
-                                (take tricks leaderboard-size)
-                                tricks))])
+        (apply ~a "**Most popular tricks in your guild (page " (add1 pageno) " of " pages "):**"
+               (for/list ([i (in-naturals (add1 (* leaderboard-size pageno)))]
+                          [trick
+                            (if (> (length page) leaderboard-size)
+                                (take page leaderboard-size)
+                                page)])
                  (~a
-                  "\n" (add1 i) ". **" (car trick) "**, by <@" (trick-author (cdr trick))
+                  "\n" i ". **" (car trick) "**, by <@" (trick-author (cdr trick))
                   ">, invoked **" (trick-invocations (cdr trick)) "**x"))))))
 
 (define (show-trick client db message text)
