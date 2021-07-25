@@ -88,7 +88,7 @@
    (thunk
     (let loop ([data #hash()])
       (match-let ([(list val client channel) (thread-receive)])
-        (let* ([key (cons (rc:user-id (rc:client-user client)) channel)]
+        (let* ([key (cons (hash-ref (rc:client-user client) 'id) channel)]
                [newval (+ val (hash-ref data key 0))])
           (unless (zero? newval)
             (with-handlers ([exn:fail? (const #f)]) (http:trigger-typing-indicator client channel)))
@@ -326,11 +326,11 @@
            (hash-set! (trick-storage trick) key data)
            #t)))))))
 
-; client -> (emote name -> emote id)
+; emote name -> emote id
 (define emote-lookup-cache (make-hash))
 
-; client -> set of emote ids known by the bot
-(define emote-whitelist-cache (make-hash))
+; set of emote ids known by the bot
+(define known-emotes (mutable-set))
 
 ; emote id -> bytes
 (define emote-image-cache (make-hash))
@@ -347,21 +347,17 @@
                            get-pure-port
                            port->bytes))))
       (loop)))))
-(define/contract ((emote-image client) id)
-  (-> rc:client? (-> string? (or/c bytes? #f)))
+
+(define/contract (emote-image id)
+  (-> string? (or/c bytes? #f))
   (hash-ref!
-   emote-image-cache id
+   emote-image-cache
+   id
    (thunk
     (and 
      ; Is this an emote that this bot has encountered?
      ; If not, don't bother requesting it and just return #f
-     (set-member? (hash-ref! emote-whitelist-cache client
-                             ; COFU a set of all emotes in the lookup table
-                             (thunk (~> emote-lookup-cache
-                                        (hash-ref client)
-                                        hash-values
-                                        list->set)))
-                  id)
+     (set-member? known-emotes id)
      (let ([ch (make-channel)])
        (thread-send emote-image-thread (cons id ch))
        (let ([data (channel-get ch)])
@@ -378,12 +374,8 @@
                                     (let loop ([data (open-input-string args)])
                                       (let ([val (read data)])
                                         (if (eof-object? val) null (cons val (loop data))))))))
-            (emote-lookup     . ,(curry hash-ref
-                                        (hash-ref! emote-lookup-cache client
-                                                   (thunk (for*/hash ([(_ guild) (rc:client-guilds client)]
-                                                                      [emoji     (rc:guild-emojis guild)])
-                                                            (values (rc:emoji-name emoji) (rc:emoji-id emoji)))))))
-            (emote-image      . ,(emote-image client))
+            (emote-lookup     . ,(curry hash-ref emote-lookup-cache))
+            (emote-image      . ,emote-image)
             (delete-caller    . ,(thunk (thread-send deleter-thread (cons client message))))
             (make-attachment  . ,make-attachment)
             (call-trick       . ,(call-subtrick client db context-id message placeholder))
@@ -471,6 +463,16 @@
           (call-with-values (thunk (func client db message content))
                             (create-message-with-contents client channel message)))))))
 
+(define (guild-create _ws-client _client guild)
+  ; eagerly fill all the emote mappings for each guild, so we don't need to touch the
+  ; network when tricks call emote-id
+  (let ([known (mutable-set)])
+    (for ([emote (in-list (hash-ref guild 'emojis null))])
+      (hash-set! emote-lookup-cache (hash-ref emote 'name) (hash-ref emote 'id))
+      (set-add! known (hash-ref emote 'id)))
+    (set-union! known-emotes known)
+    (log-r16-debug "Preloaded ~a emote ID's" (set-count known))))
+
 (define (init-client folder token)
   (log-r16-info "Storing tricks in ~a" folder)
   (let* ([client (rc:make-client token
@@ -484,6 +486,7 @@
         (db:commit-db! db trick->json)
         (loop))))
     (rc:on-event 'raw-message-create client (message-received db))
+    (rc:on-event 'raw-guild-create client guild-create)
     client))
 
 (define (get-folder)
