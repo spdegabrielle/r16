@@ -192,9 +192,13 @@
          (string-join _ ":"))))
 
 (define (stats client db message text)
-  (~a "Uptime (dd:hh:mm:ss): " (uptime)
-      "\n"
-      "Bytes in use: " (current-memory-use)))
+  (string-join
+   (list (~a "Uptime (dd:hh:mm:ss): " (uptime))
+         (~a "Bytes in use: " (current-memory-use))
+         (~a "Total trick invocations (for your guild): "
+             (for/sum ([trick (in-list (db:all-tricks db (context-id message)))])
+               (trick-invocations trick))))
+   "\n"))
 
 (define (cmp-tricks lt rt)
   (let ([l (cdr lt)] [r (cdr rt)])
