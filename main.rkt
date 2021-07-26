@@ -301,8 +301,8 @@
 (define (storage-info message type)
   (match type
     ['guild   (cons 65536 'global)]
-    ['channel (cons 8192  (hash-ref message 'channel_id))]
-    ['user    (cons 2048  (message-author-id message))]
+    ['channel (cons 8192  (string->symbol (hash-ref message 'channel_id)))]
+    ['user    (cons 2048  (string->symbol (message-author-id message)))]
     [_        (cons 0     #f)]))
 
 (define/contract (read-storage trick message type)
