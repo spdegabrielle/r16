@@ -130,8 +130,7 @@
 (define (commit-db! db trick->json)
   (with-db-lock db
     (and (trickdb-dirty db)
-         (with-handlers ((exn:fail? (lambda (e)
-                                      (log-r16-error (~a "Error saving tricks: " e)) #f)))
+         (begin
            (save (trickdb-data db) trick->json (trickdb-filename db))
            (set-trickdb-dirty! db #f)
            #t))))
