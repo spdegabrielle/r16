@@ -1,6 +1,15 @@
-#lang racket
+#lang racket/base
 
-(require racket/contract racket/sandbox syntax/strip-context threading)
+(require
+ racket/contract
+ (only-in racket/format ~a)
+ (only-in racket/function thunk)
+ (only-in racket/list filter-not)
+ racket/sandbox
+ (only-in racket/sequence sequence->list)
+ (only-in racket/string non-empty-string?)
+ (only-in syntax/strip-context replace-context)
+ threading)
 
 (provide
  definitions?
@@ -181,7 +190,10 @@
   (run-result stdout (and (non-empty-string? stderr) stderr) results))
 
 (module+ test
-  (require rackunit)
+  (require
+   (only-in racket/class is-a?)
+   (only-in racket/format ~s)
+   rackunit)
 
   (define empty-defs '(()))
   (define (any? _ignored) #t)

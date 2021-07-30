@@ -1,4 +1,4 @@
-#lang racket
+#lang racket/base
 
 (provide (struct-out trick) json->trick trick->json)
 

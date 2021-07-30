@@ -1,5 +1,6 @@
-#lang racket
+#lang racket/base
 
+(require racket/contract)
 (provide config/c check-config)
 
 (define-syntax-rule (config/c [key vpred] ...)

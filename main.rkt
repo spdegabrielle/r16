@@ -1,12 +1,20 @@
 #!/usr/bin/env racket
-#lang racket
+#lang racket/base
 
-(require json threading
-         "common.rkt"
-         "backend.rkt"
-         "interface.rkt"
-         "config.rkt"
-         (prefix-in db: "trick-db.rkt"))
+(require
+ (only-in racket/class new send)
+ (only-in racket/contract -> contract or/c)
+ (only-in racket/format ~a)
+ (only-in racket/function const thunk)
+ racket/match
+ (only-in racket/port call-with-input-string with-input-from-string)
+ json
+ threading
+ "backend.rkt"
+ "common.rkt"
+ "config.rkt"
+ "interface.rkt"
+ (prefix-in db: "trick-db.rkt"))
 
 (define (readable? x)
   (and (string? x)

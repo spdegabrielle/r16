@@ -1,9 +1,17 @@
-#lang racket
+#lang racket/base
 
-(require "interface.rkt" "common.rkt"
-         (prefix-in ev: "evaluator.rkt")
-         (prefix-in db: "trick-db.rkt")
-         threading)
+(require
+ racket/class
+ racket/contract
+ (only-in racket/format ~a)
+ (only-in racket/function const identity thunk)
+ (only-in racket/sequence sequence->list)
+ (only-in racket/string string-join)
+ threading
+ "common.rkt"
+ (prefix-in ev: "evaluator.rkt")
+ "interface.rkt"
+ (prefix-in db: "trick-db.rkt"))
 
 (provide r16%)
 

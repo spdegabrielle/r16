@@ -1,4 +1,4 @@
-#lang racket
+#lang racket/base
 
 ;; #lang r16/trick <trick>
 

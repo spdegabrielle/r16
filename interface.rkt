@@ -1,8 +1,10 @@
-#lang racket
+#lang racket/base
 
-(require (only-in "evaluator.rkt" definitions? run-result?)
-         threading
-         "common.rkt")
+(require
+ racket/class
+ racket/contract
+ (only-in "evaluator.rkt" definitions? run-result?)
+ "common.rkt")
 
 (provide r16-backend? r16-frontend?
          r16-backend<%> r16-frontend<%>

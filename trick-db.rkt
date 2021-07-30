@@ -1,8 +1,13 @@
-#lang racket
+#lang racket/base
 
 (require
  json
  racket/contract
+ (only-in racket/file call-with-atomic-output-file)
+ (only-in racket/format ~a)
+ (only-in racket/function const thunk)
+ (only-in racket/list last)
+ (only-in racket/string string-suffix? string-trim)
  (only-in racket/symbol symbol->immutable-string)
  "log.rkt")
 
@@ -136,7 +141,10 @@
            #t))))
 
 (module* test #f
-  (require rackunit)
+  (require (only-in racket/file
+                    delete-directory/files
+                    make-temporary-file)
+           rackunit)
 
   (struct
     fake-trick
