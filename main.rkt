@@ -3,6 +3,7 @@
 
 (require
  (only-in racket/class new send)
+ (only-in racket/cmdline parse-command-line)
  (only-in racket/contract -> contract or/c)
  (only-in racket/format ~a)
  (only-in racket/function const thunk)
@@ -30,30 +31,31 @@
            [module readable?]))]
    [storage path-string?]))
 
-(define help-string
-  (~a #:separator "\n"
-      "Options available:"
-      "  -h"
-      "  --help                  Show this message"
-      ""
-      "  -c [config]"
-      "  --config [config]       Read the config from [config]"
-      ""
-      "  --                      Read the config from stdin"))
-
 (define (get-config)
-  (define json
-    (match (current-command-line-arguments)
-      [(vector "--") (read-json)]
-      [(vector (or "-c" "--config") config-string)
-       (call-with-input-string config-string read-json)]
-      [(vector (or "-h" "--help")) (raise-user-error help-string)]
-      [(vector path) (call-with-input-file* path read-json)]
-      [(vector) (raise-user-error (~a "Please pass the config.\n" help-string))]
-      [_ (raise-user-error (~a "Unrecognised options.\n" help-string))]))
-  (contract r16-config? json
-            'config 'config
-            'config #f))
+  (parse-command-line
+   "r16"
+   (current-command-line-arguments)
+   ; flag definitions
+   `((usage-help
+      "R16: Interactive, Community-Driven Code Evaluation")
+     (once-any
+      [("-c" "--config")
+       ,(lambda (_flag path)
+          (if (equal? path "-")
+              (read-json)
+              (call-with-input-file* path read-json)))
+       ("Path to config file. If `-`, config is read as json from standard input." "path")]
+      [("-s" "--config-string")
+       ,(lambda (_flag config) (call-with-input-string config read-json))
+       ("Provide config on the command line as a json string." "config_json")]))
+   ; Receives flag values + positional arguments
+   ; Result of this function is the result of the whole parse-command-line form.
+   (lambda (flag-values)
+     (contract r16-config? (car flag-values)
+               'config 'config
+               'config #f))
+   ; positional argument names
+   '()))
 
 (define (make-frontend config)
   (define frontend-config (hash-ref config 'frontend))
