@@ -12,6 +12,7 @@
  "backend.rkt"
  "common.rkt"
  "config.rkt"
+ "log.rkt"
  "interface.rkt"
  (prefix-in db: "trick-db.rkt"))
 
@@ -84,6 +85,16 @@
   (define config (get-config))
   (define path (hash-ref config 'storage))
   (define db (db:make-trickdb path json->trick))
+
+  (define r16-receiver (make-log-receiver r16-logger 'debug))
+  (thread
+   (thunk
+    (let loop ()
+      (let ([v (sync r16-receiver)])
+        (printf "[~a] ~a\n"
+                (vector-ref v 0)
+                (vector-ref v 1)))
+      (loop))))
 
   (parameterize ([current-backend (new r16% [db db])]
                  [current-frontend (make-frontend config)])

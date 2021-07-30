@@ -172,15 +172,14 @@
 
     (define/public (start)
       (define discord-receiver (make-log-receiver rc:discord-logger 'debug))
-      (define r16-receiver (make-log-receiver r16-logger 'debug))
-      (~>
-       (let loop ()
-         (let ([v (sync discord-receiver r16-receiver)])
-           (printf "[~a] ~a\n"
-                   (vector-ref v 0)
-                   (vector-ref v 1)))
-         (loop))
-       thunk thread)
+      (thread
+       (thunk
+        (let loop ()
+          (let ([v (sync discord-receiver)])
+            (printf "[~a] ~a\n"
+                    (vector-ref v 0)
+                    (vector-ref v 1)))
+          (loop))))
       (~>
        (let loop ()
         (sleep 30)
