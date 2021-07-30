@@ -7,10 +7,8 @@
  (only-in racket/contract -> contract or/c)
  (only-in racket/format ~a)
  (only-in racket/function const thunk)
- racket/match
  (only-in racket/port call-with-input-string with-input-from-string)
  json
- threading
  "backend.rkt"
  "common.rkt"
  "config.rkt"
@@ -71,8 +69,11 @@
       read))
 
   (define make-frontend
-    (~> (~a "Frontend " frontend-module " does not provide r16-make-frontend") raise-user-error thunk
-        (dynamic-require frontend-module 'r16-make-frontend _)))
+    (dynamic-require
+     frontend-module
+     'r16-make-frontend
+     (thunk (raise-user-error
+             (~a "Frontend " frontend-module " does not provide r16-make-frontend")))))
 
   ((contract (-> jsexpr? r16-frontend?) make-frontend
              frontend-module 'frontend
