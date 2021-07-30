@@ -1,6 +1,9 @@
 # r16
 
-R16 is a "trick bot" for Discord. It saves snippets of code, which can then be recalled and executed on user-provided input.
+R16 is a bot for interactive, community-driven code evaluation.
+It saves snippets of code, which can then be recalled and executed on user-provided input.
+
+Please see the [documentation](https://docs.racket-lang.org/r16/index.html) for details.
 
 ## History
 
@@ -20,7 +23,8 @@ number to "16".
 ## Usage
 1. Clone this repository
 2. `raco pkg install --user --auto --type dir <clone directory>`
-3. `BOT_TOKEN=<your discord token> racket main.rkt <directory to save in>`
+3. Initialize a config file (see the docs)
+4. `racket <clone_dir>/main.rkt -c config.json`
 
 Alternatively, you can `raco pkg install r16` and run the bot from the install directory, using `raco pkg update` to update.
 

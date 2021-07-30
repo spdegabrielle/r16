@@ -1,14 +1,25 @@
-#lang racket
+#lang racket/base
 
-(require "../interface.rkt"
-         "../log.rkt"
-         "../common.rkt"
-         "../config.rkt"
-         (prefix-in rc: racket-cord)
-         (prefix-in http: racket-cord/http)
-         (prefix-in ev: "../evaluator.rkt")
-         (only-in net/url get-pure-port string->url)
-         threading)
+(require
+ (only-in net/url get-pure-port string->url)
+ racket/class
+ racket/contract
+ (only-in racket/format ~a)
+ (only-in racket/function const curry identity negate thunk)
+ racket/list
+ racket/match
+ (only-in racket/math exact-ceiling)
+ (only-in racket/port port->bytes with-input-from-string with-output-to-string)
+ racket/set
+ racket/string
+ threading
+ (prefix-in http: racket-cord/http)
+ (prefix-in rc: racket-cord)
+ "../common.rkt"
+ "../config.rkt"
+ (prefix-in ev: "../evaluator.rkt")
+ "../interface.rkt"
+ "../log.rkt")
 
 (provide r16-make-frontend)
 
@@ -362,7 +373,7 @@
                 inexact->exact (max 1) (min pages) sub1))
           (define page (drop tricks (* leaderboard-size pageno)))
           (list
-           (if (empty? tricks)
+           (if (null? tricks)
                (~a "There aren't any tricks registered in your guild! \
                     Use `" bot-prefix "register` to create one.")
                (apply
