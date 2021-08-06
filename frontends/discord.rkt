@@ -39,16 +39,51 @@
     (init-field bot-prefix)
     (init-field trick-prefix)
 
-    (define typing-thread
-      (thread
-       (thunk
-        (let loop ([data #hash()])
-          (match-let ([(list val client channel) (thread-receive)])
-            (let* ([key (cons (hash-ref (rc:client-user client) 'id) channel)]
-                   [newval (+ val (hash-ref data key 0))])
-              (unless (zero? newval)
-                (with-handlers ([exn:fail? (const #f)]) (http:trigger-typing-indicator client channel)))
-              (loop (hash-set data key newval))))))))
+    (define with-typing-indicator ;; (_ proc)
+      (let ()
+        ;; channel -> active typing counter
+        (define counters-box (box (make-immutable-hash)))
+
+        (define (counters-swap! proc)
+          (define old (unbox counters-box))
+          (define newv (proc old))
+          (if (box-cas! counters-box old newv)
+              newv
+              (counters-swap! proc)))
+
+        (define (change-counter channel delta)
+          (counters-swap!
+           (lambda (counters)
+             (~> (hash-ref counters channel 0)
+                 (+ delta)
+                 (match _
+                   [0 (hash-remove counters channel)]
+                   [v (hash-set counters channel v)]))))
+          (maybe-trigger-typing channel))
+
+        (define (maybe-trigger-typing channel)
+          (when (hash-ref (unbox counters-box) channel #f)
+            (trigger-typing channel)))
+
+        (define (trigger-typing channel)
+          (with-handlers ([exn:fail? void])
+            (http:trigger-typing-indicator client channel)))
+
+        (define _typing-thread
+          (thread
+           (thunk
+            (let loop ()
+              (for ([(channel _) (unbox counters-box)])
+                (trigger-typing channel))
+              (sleep 5)
+              (loop)))))
+
+        (lambda (proc)
+          (define channel (hash-ref (current-message) 'channel_id))
+          (dynamic-wind
+            (thunk (change-counter channel 1))
+            proc
+            (thunk (change-counter channel -1))))))
 
     (define deleter-thread
       (thread
@@ -258,13 +293,6 @@
                            #:file attachment
                            #:reply-to reference
                            #:allowed-mentions (hash 'parse '())))
-
-    (define (with-typing-indicator thunk)
-      (let ([payload (list client (hash-ref (current-message) 'channel_id))])
-        (thread-send typing-thread (cons 1 payload))
-        (let ([result (call-with-values thunk list)])
-          (thread-send typing-thread (cons -1 payload))
-          (apply values result))))
 
     (define parse-command
       (let ()

@@ -45,7 +45,7 @@
             (raise (make-exn:fail:contract (~a "Trick " name " doesn't exist!")))))
 
       (define (read-args)
-        (with-handlers ([exn:fail:read? #f])
+        (with-handlers ([exn:fail:read? (const #f)])
           (sequence->list (in-producer read eof (open-input-string args)))))
 
       (define base
