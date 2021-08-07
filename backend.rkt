@@ -21,7 +21,7 @@
     (field [start-time (current-seconds)])
 
     (define (evaluation-context enrich-context context-id trick args parent-ctx)
-      (define placeholder (make-placeholder #f))
+      (define this-context #f)
 
       (define/contract (call-subtrick name arguments)
         (-> (or/c symbol? string?) any/c any)
@@ -36,7 +36,7 @@
                   context-id
                   trick-obj
                   (if arguments (~a arguments) "")
-                  parent-ctx)
+                  this-context)
                  (const #t)))
               (write-string (ev:run-result-stdout rr))
               (cond [(ev:run-result-stderr rr)
@@ -52,11 +52,10 @@
         `(((string-args    . ,args)
            (read-args      . ,read-args)
            (call-trick     . ,call-subtrick)
-           (parent-context . ,parent-ctx))
+           (parent-context . ,(and parent-ctx (make-hash (car parent-ctx)))))
           threading))
-      (define new-context (enrich-context base trick args parent-ctx))
-      (placeholder-set! placeholder (make-hash (car new-context)))
-      (make-reader-graph new-context))
+      (set! this-context (enrich-context base trick args parent-ctx))
+      this-context)
 
     (define (response? x)
       (send (current-frontend) response? x))
