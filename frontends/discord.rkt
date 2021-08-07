@@ -217,7 +217,7 @@
           ,@(cdr base))))
 
     (define/public (start)
-      (define discord-receiver (make-log-receiver rc:discord-logger 'debug))
+      (define discord-receiver (make-log-receiver rc:discord-logger 'warning))
       (thread
        (thunk
         (let loop ()
