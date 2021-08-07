@@ -98,6 +98,14 @@
 
   (parameterize ([current-backend (new r16% [db db])]
                  [current-frontend (make-frontend config)])
+    (thread
+     (thunk
+      (let loop ()
+        (sleep 30)
+        (define result (send (current-backend) save))
+        (when (exn:fail? result)
+          (log-r16-error (~a "Error saving tricks: " result)))
+        (loop))))
     (send (current-frontend) start)))
 
 (module* main #f
