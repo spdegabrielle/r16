@@ -186,6 +186,7 @@
                             (with-input-from-string read)
                             (with-handlers ([exn:fail:read? (const #f)]) _))])
           (and (not (eof-object? datum)) datum)))
+
       (define/contract ((write-storage trick) type data)
         (-> (or/c trick? #f) (-> (or/c 'guild 'channel 'user) any/c boolean?))
         (and
