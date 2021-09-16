@@ -60,6 +60,10 @@ If @racket[argument] is @racket[#f], then an empty string is passed to the subtr
 Text of the message after the bot command, as a string.
 }
 
+@defthing[trick-name string?]{
+The name of the currently running trick, as a string. For ad-hoc evaluations, the string is empty.
+}
+
 @defproc[(read-args) (or/c (listof any/c) #f)]{
 Function that returns @racket[string-args], but as a list of datums read by @racket[read]. If there is a read failure, @racket[#f] is returned.
 }
