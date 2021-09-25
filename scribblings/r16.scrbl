@@ -1,6 +1,6 @@
 #lang scribble/manual
 
-@(require (for-label racket/base))
+@(require (for-label racket/base (only-in racket/math natural?) racket/contract))
 
 @title{R16 -- Community-Driven Interactive Code Evaluation}
 
@@ -94,6 +94,7 @@ The @tt{frontend} object in the configuration file can have the following keys a
 ]
 
 @subsection{Trick Environment Extensions}
+
 In additional to the bindings described above, the following items are available in the
 trick environment.
 
@@ -143,3 +144,14 @@ A trick's "trick-local storage" can be per-guild, per-channel, or per-user; each
 }
 
 This will always be a no-op when invoked from the eval command.
+
+@defproc[(attachment-data [attachment any/c]) bytes?]{
+Get the payload of an attachment created with @racket[make-attachment].
+}
+
+@defproc[(open-attachment [index natural? 0]) (or/c input-port? #f)]{
+Opens the @racket[index]th attachment of the message as an input port.
+
+Returns @racket[#f] if the message doesn't have an @racket[index]th attachment, or
+if the attachment couldn't be opened for any other reason.
+}

@@ -33,6 +33,13 @@
 (define (message-author-id message)
   (hash-ref (hash-ref message 'author) 'id))
 
+(define-syntax-rule (thread-loop body ...)
+  (thread
+   (thunk
+    (let loop ()
+      body ...
+      (loop)))))
+
 (define discord-frontend%
   (class* object% [r16-frontend<%>]
     (init-field client)
@@ -70,13 +77,10 @@
             (http:trigger-typing-indicator client channel)))
 
         (define _typing-thread
-          (thread
-           (thunk
-            (let loop ()
-              (for ([(channel _) (unbox counters-box)])
-                (trigger-typing channel))
-              (sleep 5)
-              (loop)))))
+          (thread-loop
+           (for ([(channel _) (unbox counters-box)])
+             (trigger-typing channel))
+           (sleep 5)))
 
         (lambda (proc)
           (define channel (hash-ref (current-message) 'channel_id))
@@ -86,30 +90,33 @@
             (thunk (change-counter channel -1))))))
 
     (define deleter-thread
-      (thread
-       (thunk
-        (let loop ()
-          (match-let ([(cons client message) (thread-receive)])
-            (with-handlers ([exn:fail:network? identity])
-              (http:delete-message
-               client
-               (hash-ref message 'channel_id)
-               (hash-ref message 'id)))
-            (loop))))))
+      (thread-loop
+       (match-let ([(cons client message) (thread-receive)])
+         (with-handlers ([exn:fail:network? identity])
+           (http:delete-message
+            client
+            (hash-ref message 'channel_id)
+            (hash-ref message 'id))))))
 
     (define emote-image-thread
-      (thread
-       (thunk
-        (let loop ()
-          (let ([message (thread-receive)])
-            ; TODO this only uses PNG, racket-cord needs to expose an animated field on emoji
-            (channel-put (cdr message)
-                         (with-handlers ([exn:fail? (const #f)])
-                           (~> (~a "https://cdn.discordapp.com/emojis/" (car message) ".png?v=1")
-                               string->url
-                               get-pure-port
-                               port->bytes))))
-          (loop)))))
+      (thread-loop
+       (let ([message (thread-receive)])
+         ; TODO this only uses PNG, racket-cord needs to expose an animated field on emoji
+         (channel-put (cdr message)
+                      (with-handlers ([exn:fail? (const #f)])
+                        (~> (~a "https://cdn.discordapp.com/emojis/" (car message) ".png?v=1")
+                            string->url
+                            get-pure-port
+                            port->bytes))))))
+
+    (define open-attachment-thread
+      (thread-loop
+       (match-define (list url cust chan) (thread-receive))
+       (define port
+         (with-handlers ([exn:fail? (const #f)])
+           (parameterize ([current-custodian cust])
+             (get-pure-port url))))
+       (channel-put chan port)))
 
     (define current-message (make-parameter #f))
 
@@ -149,6 +156,7 @@
     (define/public (get-enrich-context)
       (define message (current-message))
       (define message-contents (hash-ref message 'content))
+      (define message-attachments (or (hash-ref message 'attachments #f) null))
       (define message-author (message-author-id message))
 
       (define/contract (emote-image id)
@@ -170,6 +178,22 @@
       (define/contract (make-attachment data name type)
         (-> bytes? (or/c string? bytes?) (or/c symbol? string? bytes?) http:attachment?)
         (http:attachment data (~a type) name))
+
+      (define attachment-count (length message-attachments))
+
+      (define/contract (open-attachment [index 0])
+        (->* () (exact-nonnegative-integer?) (or/c input-port? #f))
+        (let/cc return
+          (define chan (make-channel))
+          (when (>= index attachment-count)
+            (return #f))
+          (define attachment (list-ref message-attachments index))
+          #; ;; is an attachment size cap necessary?
+          (when (> (hash-ref attachment 'size) OPEN_ATTACHMENT_MAX_SIZE_BYTES)
+            (return #f))
+          (define attachment-url (string->url (hash-ref attachment 'proxy_url)))
+          (thread-send open-attachment-thread (list attachment-url (current-custodian) chan))
+          (channel-get chan)))
 
       (define (storage-info type)
         (match type
@@ -214,6 +238,7 @@
            (read-storage     . ,(read-storage trick-obj))
            (write-storage    . ,(write-storage trick-obj))
            (attachment-data  . ,http:attachment-data)
+           (open-attachment  . ,open-attachment)
            ,@(car base))
           ,@(cdr base))))
 
