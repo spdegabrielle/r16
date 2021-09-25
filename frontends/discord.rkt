@@ -19,7 +19,8 @@
  "../config.rkt"
  (prefix-in ev: "../evaluator.rkt")
  "../interface.rkt"
- "../log.rkt")
+ "../log.rkt"
+ "../utils.rkt")
 
 (provide r16-make-frontend)
 
@@ -33,12 +34,24 @@
 (define (message-author-id message)
   (hash-ref (hash-ref message 'author) 'id))
 
-(define-syntax-rule (thread-loop body ...)
-  (thread
-   (thunk
-    (let loop ()
-      body ...
-      (loop)))))
+(define-syntax-rule (define/off-thread (name args ...)
+                      body ...)
+  (begin
+    (define worker-thread
+      (thread-loop
+       (match (thread-receive)
+         [(vector chan args ...)
+          (define res (let () body ...))
+          (sync/timeout 1 (channel-put-evt chan res))]
+         [_ (void)])))
+    (define (name args ...)
+      (define chan (make-channel))
+      (sync
+       chan
+       (guard-evt
+        (thunk
+         (thread-send worker-thread (vector chan args ...))
+         never-evt))))))
 
 (define discord-frontend%
   (class* object% [r16-frontend<%>]
@@ -89,36 +102,28 @@
             proc
             (thunk (change-counter channel -1))))))
 
-    (define deleter-thread
-      (thread-loop
-       (match-let ([(cons client message) (thread-receive)])
-         (with-handlers ([exn:fail:network? identity])
-           (http:delete-message
-            client
-            (hash-ref message 'channel_id)
-            (hash-ref message 'id))))))
+    (define/off-thread (do-delete-message message)
+      (with-handlers ([exn:fail:network? identity])
+        (http:delete-message
+         client
+         (hash-ref message 'channel_id)
+         (hash-ref message 'id))))
 
-    (define emote-image-thread
-      (thread-loop
-       (let ([message (thread-receive)])
-         ; TODO this only uses PNG, racket-cord needs to expose an animated field on emoji
-         (channel-put (cdr message)
-                      (with-handlers ([exn:fail? (const #f)])
-                        (~> (~a "https://cdn.discordapp.com/emojis/" (car message) ".png?v=1")
-                            string->url
-                            get-pure-port
-                            port->bytes))))))
+    (define/off-thread (get-emote-image id)
+      (with-handlers ([exn:fail? (const #f)])
+        ; TODO this only uses PNG, racket-cord needs to expose an animated field on emoji
+        (~> (~a "https://cdn.discordapp.com/emojis/" id ".png?v=1")
+            string->url
+            get-pure-port
+            port->bytes)))
 
-    (define open-attachment-thread
-      (thread-loop
-       (match-define (list url cust chan) (thread-receive))
-       (define port
-         (with-handlers ([exn:fail? (const #f)])
-           (parameterize ([current-custodian cust])
-             (get-pure-port url))))
-       (channel-put chan port)))
+    (define/off-thread (open-attachment-url cust url)
+      (with-handlers ([exn:fail? (const #f)])
+        (parameterize ([current-custodian cust])
+          (get-pure-port url))))
 
     (define current-message (make-parameter #f))
+    (define current-deleted-box (make-parameter #f))
 
     (define (format-run-result rr)
       `(,(ev:run-result-stdout rr)
@@ -154,6 +159,7 @@
     (define emote-image-cache (make-hash))
 
     (define/public (get-enrich-context)
+      (define deleted-box (current-deleted-box))
       (define message (current-message))
       (define message-contents (hash-ref message 'content))
       (define message-attachments (or (hash-ref message 'attachments #f) null))
@@ -165,15 +171,16 @@
          emote-image-cache
          id
          (thunk
-          (and 
-           ; Is this an emote that this bot has encountered?
-           ; If not, don't bother requesting it and just return #f
-           (set-member? known-emotes id)
-           (let ([ch (make-channel)])
-             (thread-send emote-image-thread (cons id ch))
-             (let ([data (channel-get ch)])
-               ; If empty byte string returned, return #f
-               (and data (positive? (bytes-length data)) data)))))))
+          (let/cc return
+            ; Is this an emote that this bot has encountered?
+            ; If not, don't bother requesting it and just return #f
+            (unless (set-member? known-emotes id)
+              (return #f))
+            (define data (get-emote-image id))
+            ; If empty byte string returned, return #f
+            (unless (and data (positive? (bytes-length data)))
+              (return #f))
+            data))))
 
       (define/contract (make-attachment data name type)
         (-> bytes? (or/c string? bytes?) (or/c symbol? string? bytes?) http:attachment?)
@@ -191,9 +198,9 @@
           #; ;; is an attachment size cap necessary?
           (when (> (hash-ref attachment 'size) OPEN_ATTACHMENT_MAX_SIZE_BYTES)
             (return #f))
-          (define attachment-url (string->url (hash-ref attachment 'proxy_url)))
-          (thread-send open-attachment-thread (list attachment-url (current-custodian) chan))
-          (channel-get chan)))
+          (open-attachment-url
+           (current-custodian)
+           (string->url (hash-ref attachment 'proxy_url)))))
 
       (define (storage-info type)
         (match type
@@ -226,7 +233,9 @@
                  #t)))))))
 
       (define (delete-caller)
-        (thread-send deleter-thread (cons client message)))
+        (when (box-cas! deleted-box #f #t)
+          (do-delete-message message))
+        (void))
 
       (lambda (base trick-obj _args _parent-context)
         `(((message-contents . ,message-contents)
@@ -239,6 +248,7 @@
            (write-storage    . ,(write-storage trick-obj))
            (attachment-data  . ,http:attachment-data)
            (open-attachment  . ,open-attachment)
+           (attachment-count . ,attachment-count)
            ,@(car base))
           ,@(cdr base))))
 
@@ -268,27 +278,30 @@
 
     (define (message-received _ws-client _client message)
       (parameterize ([current-message message]
+                     [current-deleted-box (box #f)]
                      [current-context-id (context-id message)])
         (define content (string-trim (hash-ref message 'content)))
         (define channel (hash-ref message 'channel_id))
         (unless (message-from-bot? message)
-          (match-let ([(cons func content) (parse-command content)])
-            (when func
-              (create-message-with-contents
-               channel
-               message
-               (with-handlers
-                 ([exn?
-                   (lambda (e)
-                     (define port (open-output-string))
-                     (parameterize ([current-error-port port])
-                       ((error-display-handler) (exn-message e) e))
-                     (define error-message (get-output-string port))
-                     (log-r16-error (~a "Internal error:\n" error-message))
-                     (list (~a ":warning: Internal error:\n" error-message)))])
-                 (func content))))))))
+          (match-define (cons func func-args) (parse-command content))
+          (when func
+            (define contents
+              (with-handlers
+                ([exn?
+                  (lambda (e)
+                    (define port (open-output-string))
+                    (parameterize ([current-error-port port])
+                      ((error-display-handler) (exn-message e) e))
+                    (define error-message (get-output-string port))
+                    (log-r16-error (~a "Internal error:\n" error-message))
+                    (list (~a ":warning: Internal error:\n" error-message)))])
+                (func func-args)))
+            (create-message-with-contents
+             channel
+             (and (not (unbox (current-deleted-box))) message)
+             contents)))))
 
-    (define (create-message-with-contents channel message contents)
+    (define (create-message-with-contents channel reply-message contents)
       (define char-cap 2000)
       (define slice-size 30)
 
@@ -305,7 +318,9 @@
         (if (or attachment (non-empty-string? raw-content))
             (truncate-string raw-content char-cap)
             "\u200b"))
-      (define reference (hash 'message_id (hash-ref message 'id)))
+      (define reference
+        (and reply-message
+             (hash 'message_id (hash-ref reply-message 'id))))
 
       (http:create-message client channel content
                            #:file attachment

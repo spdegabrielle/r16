@@ -98,9 +98,8 @@ The @tt{frontend} object in the configuration file can have the following keys a
 In additional to the bindings described above, the following items are available in the
 trick environment.
 
-
 @defproc[(delete-caller) void?]{
-Thunk that deletes the message that invoked this sandbox.
+Delete the message that invoked this sandbox.
 }
 
 @defproc[(emote-lookup [name string?]) (or/c string? #f)]{
@@ -115,7 +114,7 @@ Function that returns the PNG data of the emote with ID @racket[id], or @racket[
                           [name (or/c string? bytes?)]
                           [mime (or/c symbol? string? bytes?)]) any/c]{
 Creates an attachment with payload @racket[payload], filename @racket[name], and MIME-type @racket[mime].
-This opaque object must be returned from the trick to be sent to Discord.
+This object must be returned from the trick to be sent to Discord.
 If more than one attachment is returned, an unspecified one is sent.
 }
 
@@ -150,8 +149,12 @@ Get the payload of an attachment created with @racket[make-attachment].
 }
 
 @defproc[(open-attachment [index natural? 0]) (or/c input-port? #f)]{
-Opens the @racket[index]th attachment of the message as an input port.
+Opens the @racket[index]th attachment of the message that invoked this sandbox, as an input port.
 
 Returns @racket[#f] if the message doesn't have an @racket[index]th attachment, or
 if the attachment couldn't be opened for any other reason.
+}
+
+@defthing[attachment-count natural?]{
+The number of files attached to the message that invoked this sandbox.
 }

@@ -14,6 +14,7 @@
  "config.rkt"
  "log.rkt"
  "interface.rkt"
+ "utils.rkt"
  (prefix-in db: "trick-db.rkt"))
 
 (define (readable? x)
@@ -87,25 +88,19 @@
   (define db (db:make-trickdb path json->trick))
 
   (define r16-receiver (make-log-receiver r16-logger 'debug))
-  (thread
-   (thunk
-    (let loop ()
-      (let ([v (sync r16-receiver)])
-        (printf "[~a] ~a\n"
-                (vector-ref v 0)
-                (vector-ref v 1)))
-      (loop))))
+  (thread-loop
+   (define v (sync r16-receiver))
+   (printf "[~a] ~a\n"
+           (vector-ref v 0)
+           (vector-ref v 1)))
 
   (parameterize ([current-backend (new r16% [db db])]
                  [current-frontend (make-frontend config)])
-    (thread
-     (thunk
-      (let loop ()
-        (sleep 30)
-        (define result (send (current-backend) save))
-        (when (exn:fail? result)
-          (log-r16-error (~a "Error saving tricks: " result)))
-        (loop))))
+    (thread-loop
+     (sleep 30)
+     (define result (send (current-backend) save))
+     (when (exn:fail? result)
+       (log-r16-error (~a "Error saving tricks: " result))))
     (send (current-frontend) start)))
 
 (module* main #f
