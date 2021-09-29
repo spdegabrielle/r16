@@ -21,6 +21,7 @@
     (field [start-time (current-seconds)])
 
     (define (evaluation-context enrich-context context-id trick name args parent-ctx)
+      (define real-args (string->immutable-string args))
       (define this-context #f)
 
       (define/contract (call-subtrick name arguments)
@@ -48,16 +49,16 @@
 
       (define (read-args)
         (with-handlers ([exn:fail:read? (const #f)])
-          (sequence->list (in-producer read eof (open-input-string args)))))
+          (sequence->list (in-producer read eof (open-input-string real-args)))))
 
       (define base
-        `(((string-args    . ,args)
+        `(((string-args    . ,real-args)
            (read-args      . ,read-args)
            (call-trick     . ,call-subtrick)
-           (trick-name     . ,name)
-           (parent-context . ,(and parent-ctx (make-hash (car parent-ctx)))))
+           (trick-name     . ,(string->immutable-string name))
+           (parent-context . ,(and parent-ctx (make-immutable-hash (car parent-ctx)))))
           threading))
-      (set! this-context (enrich-context base trick args parent-ctx))
+      (set! this-context (enrich-context base trick real-args parent-ctx))
       this-context)
 
     (define (response? x)
