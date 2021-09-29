@@ -163,7 +163,9 @@
       (define message (current-message))
       (define message-contents (hash-ref message 'content))
       (define message-attachments (or (hash-ref message 'attachments #f) null))
+      (define reply-message-attachments (or (and~> message (hash-ref 'referenced_message #f) (hash-ref 'attachments #f)) null))
       (define message-author (message-author-id message))
+      (define channel-id (hash-ref message 'channel_id))
 
       (define/contract (emote-image id)
         (-> string? (or/c bytes? #f))
@@ -187,25 +189,33 @@
         (http:attachment data (~a type) name))
 
       (define attachment-count (length message-attachments))
+      (define reply-attachment-count (length reply-message-attachments))
 
-      (define/contract (open-attachment [index 0])
-        (->* () (exact-nonnegative-integer?) (or/c input-port? #f))
+      (define (fetch-attachment attachments index)
         (let/cc return
           (define chan (make-channel))
-          (when (>= index attachment-count)
+          (when (>= index (length attachments))
             (return #f))
-          (define attachment (list-ref message-attachments index))
+          (define attachment (list-ref attachments index))
           #; ;; is an attachment size cap necessary?
           (when (> (hash-ref attachment 'size) OPEN_ATTACHMENT_MAX_SIZE_BYTES)
             (return #f))
           (open-attachment-url
            (current-custodian)
-           (string->url (hash-ref attachment 'proxy_url)))))
+           (string->url (hash-ref attachment 'url)))))
+
+      (define/contract (open-attachment [index 0])
+        (->* () (exact-nonnegative-integer?) (or/c input-port? #f))
+        (fetch-attachment message-attachments index))
+
+      (define/contract (open-reply-attachment [index 0])
+        (->* () (exact-nonnegative-integer?) (or/c input-port? #f))
+        (fetch-attachment reply-message-attachments index))
 
       (define (storage-info type)
         (match type
           ['guild   (cons 65536 'global)]
-          ['channel (cons 8192  (string->symbol (hash-ref message 'channel_id)))]
+          ['channel (cons 8192  (string->symbol channel-id))]
           ['user    (cons 2048  (string->symbol (message-author-id message)))]
           [_        (cons 0     #f)]))
 
@@ -238,17 +248,19 @@
         (void))
 
       (lambda (base trick-obj _args _parent-context)
-        `(((message-contents . ,message-contents)
-           (message-author   . ,message-author)
-           (emote-lookup     . ,(curry hash-ref emote-lookup-cache))
-           (emote-image      . ,emote-image)
-           (delete-caller    . ,delete-caller)
-           (make-attachment  . ,make-attachment)
-           (read-storage     . ,(read-storage trick-obj))
-           (write-storage    . ,(write-storage trick-obj))
-           (attachment-data  . ,http:attachment-data)
-           (open-attachment  . ,open-attachment)
-           (attachment-count . ,attachment-count)
+        `(((message-contents       . ,message-contents)
+           (message-author         . ,message-author)
+           (emote-lookup           . ,(curry hash-ref emote-lookup-cache))
+           (emote-image            . ,emote-image)
+           (delete-caller          . ,delete-caller)
+           (make-attachment        . ,make-attachment)
+           (read-storage           . ,(read-storage trick-obj))
+           (write-storage          . ,(write-storage trick-obj))
+           (attachment-data        . ,http:attachment-data)
+           (open-attachment        . ,open-attachment)
+           (open-reply-attachment  . ,open-reply-attachment)
+           (attachment-count       . ,attachment-count)
+           (reply-attachment-count . ,reply-attachment-count)
            ,@(car base))
           ,@(cdr base))))
 

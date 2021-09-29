@@ -155,6 +155,14 @@ Returns @racket[#f] if the message doesn't have an @racket[index]th attachment, 
 if the attachment couldn't be opened for any other reason.
 }
 
+@defproc[(open-reply-attachment [index natural? 0]) (or/c input-port? #f)]{
+Same as @racket[open-reply-attachment], except fetching the attachment of the message that the invoking message replied to.
+}
+
 @defthing[attachment-count natural?]{
 The number of files attached to the message that invoked this sandbox.
+}
+
+@defthing[reply-attachment-count natural?]{
+The number of files attached to the message that the invoking message replied to.
 }
