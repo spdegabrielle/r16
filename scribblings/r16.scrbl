@@ -156,7 +156,7 @@ if the attachment couldn't be opened for any other reason.
 }
 
 @defproc[(open-reply-attachment [index natural? 0]) (or/c input-port? #f)]{
-Same as @racket[open-reply-attachment], except fetching the attachment of the message that the invoking message replied to.
+Same as @racket[open-attachment], except fetching the attachment of the message that the invoking message replied to.
 }
 
 @defthing[attachment-count natural?]{
