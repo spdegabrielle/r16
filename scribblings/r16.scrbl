@@ -166,3 +166,7 @@ The number of files attached to the message that invoked this sandbox.
 @defthing[reply-attachment-count natural?]{
 The number of files attached to the message that the invoking message replied to.
 }
+
+@defthing[reply-contents (or/c string? #f)]{
+The full message content of the message that the invoking message replied to.
+}

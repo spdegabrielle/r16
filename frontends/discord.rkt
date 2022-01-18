@@ -193,7 +193,6 @@
 
       (define (fetch-attachment attachments index)
         (let/cc return
-          (define chan (make-channel))
           (when (>= index (length attachments))
             (return #f))
           (define attachment (list-ref attachments index))
@@ -247,6 +246,11 @@
           (do-delete-message message))
         (void))
 
+      (define reply-contents
+        (and~> message
+               (hash-ref 'referenced_message #f)
+               (hash-ref 'content #f)))
+
       (lambda (base trick-obj _args _parent-context)
         `(((message-contents       . ,message-contents)
            (message-author         . ,message-author)
@@ -261,6 +265,7 @@
            (open-reply-attachment  . ,open-reply-attachment)
            (attachment-count       . ,attachment-count)
            (reply-attachment-count . ,reply-attachment-count)
+           (reply-contents         . ,reply-contents)
            ,@(car base))
           ,@(cdr base))))
 
