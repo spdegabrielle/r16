@@ -46,7 +46,6 @@
 (define (init-evaluator)
   (parameterize ([sandbox-output 'string]
                  [sandbox-error-output 'string]
-                 [sandbox-eval-limits '(30 20)]
                  [sandbox-propagate-exceptions #f]
                  [sandbox-make-environment-variables make-environment-variables])
     (make-evaluator 'racket)))

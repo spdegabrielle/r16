@@ -4,11 +4,12 @@
 (require
  (only-in racket/class new send)
  (only-in racket/cmdline parse-command-line)
- (only-in racket/contract -> contract or/c)
  (only-in racket/format ~a)
  (only-in racket/function const thunk)
  (only-in racket/port call-with-input-string with-input-from-string)
+ (only-in racket/sandbox sandbox-memory-limit sandbox-eval-limits)
  json
+ racket/contract
  "backend.rkt"
  "common.rkt"
  "config.rkt"
@@ -29,7 +30,13 @@
     (or/c readable?
           (config/c
            [module readable?]))]
-   [storage path-string?]))
+   [storage path-string?]
+   #:optional
+   [sandbox
+    (config/c
+     #:optional
+     [memory_limit (or/c (>=/c 0) #f)]
+     [eval_limits (or/c (list/c (or/c (>=/c 0) #f) (or/c (>=/c 0) #f)) #f)])]))
 
 (define (get-config)
   (parse-command-line
@@ -82,6 +89,16 @@
              'frontend #f)
    frontend-config))
 
+(define (call-with-sandbox-conf conf f)
+  (cond
+    [(not conf) (f)]
+    [else
+     (define mem-limit (hash-ref conf 'memory_limit (sandbox-memory-limit)))
+     (define eval-limit (hash-ref conf 'eval_limits (sandbox-eval-limits)))
+     (parameterize ([sandbox-memory-limit mem-limit]
+                    [sandbox-eval-limits eval-limit])
+       (f))]))
+
 (define (main)
   (define config (get-config))
   (define path (hash-ref config 'storage))
@@ -94,14 +111,17 @@
            (vector-ref v 0)
            (vector-ref v 1)))
 
-  (parameterize ([current-backend (new r16% [db db])]
-                 [current-frontend (make-frontend config)])
-    (thread-loop
-     (sleep 30)
-     (define result (send (current-backend) save))
-     (when (exn:fail? result)
-       (log-r16-error (~a "Error saving tricks: " result))))
-    (send (current-frontend) start)))
+  (call-with-sandbox-conf
+   (hash-ref config 'sandbox #f)
+   (lambda ()
+    (parameterize ([current-backend (new r16% [db db])]
+                   [current-frontend (make-frontend config)])
+      (thread-loop
+       (sleep 30)
+       (define result (send (current-backend) save))
+       (when (exn:fail? result)
+         (log-r16-error (~a "Error saving tricks: " result))))
+      (send (current-frontend) start)))))
 
 (module* main #f
   (main))
