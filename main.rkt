@@ -42,7 +42,7 @@
   (parse-command-line
    "r16"
    (current-command-line-arguments)
-   ; flag definitions
+   ;; flag definitions
    `((usage-help
       "R16: Interactive, Community-Driven Code Evaluation")
      (once-any
@@ -55,13 +55,13 @@
       [("-s" "--config-string")
        ,(lambda (_flag config) (call-with-input-string config read-json))
        ("Provide config on the command line as a json string." "config_json")]))
-   ; Receives flag values + positional arguments
-   ; Result of this function is the result of the whole parse-command-line form.
+   ;; Receives flag values + positional arguments
+   ;; Result of this function is the result of the whole parse-command-line form.
    (lambda (flag-values)
      (contract r16-config? (car flag-values)
                'config 'config
                'config #f))
-   ; positional argument names
+   ;; positional argument names
    '()))
 
 (define (make-frontend config)

@@ -11,11 +11,11 @@
  (only-in racket/symbol symbol->immutable-string)
  "log.rkt")
 
-; A context id specifies the environment tricks belong to. Most commonly, it is a
-; guild id or DM channel id
+;; A context id specifies the environment tricks belong to. Most commonly, it is a
+;; guild id or DM channel id
 (define context-id? string?)
 (define trick-key? string?)
-; A permission check is a way to ensure a trick can be modified or removed.
+;; A permission check is a way to ensure a trick can be modified or removed.
 (define permission-check? (or/c (-> any/c boolean?) #f))
 
 (provide
@@ -30,7 +30,7 @@
   (remove-trick! (-> trickdb? context-id? trick-key? permission-check? boolean?))
   (commit-db! (-> trickdb? (-> any/c jsexpr?) boolean?))))
 
-; data: context-id -> (trick-key -> trick)
+;; data: context-id -> (trick-key -> trick)
 (struct trickdb (data filename (dirty #:mutable) lock))
 
 (define (load-data dir json->trick)
@@ -67,7 +67,7 @@
 
 (define (mark-dirty db) (set-trickdb-dirty! db #t))
 
-; Note: db lock must be held
+;; Note: db lock must be held
 (define (get-submap db context-id)
   (and context-id
        (hash-ref!

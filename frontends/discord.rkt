@@ -35,9 +35,9 @@
 (define (message-author-id message)
   (hash-ref (hash-ref message 'author) 'id))
 
-; Defines a function that delegates to an external worker thread.
-; Used to expose limited IO capabilities to inside of a sandbox, as body
-; runs outside of the sandbox
+;; Defines a function that delegates to an external worker thread.
+;; Used to expose limited IO capabilities to inside of a sandbox, as body
+;; runs outside of the sandbox
 (define-syntax-rule (define/off-thread (name args ...)
                       body ...)
   (begin
@@ -109,7 +109,7 @@
 
     (define/off-thread (get-emote-image id)
       (with-handlers ([exn:fail? (const #"")])
-        ; TODO this only uses PNG, racket-cord needs to expose an animated field on emoji
+        ;; TODO this only uses PNG, racket-cord needs to expose an animated field on emoji
         (~> (~a "https://cdn.discordapp.com/emojis/" id ".png?v=1")
             string->url
             get-pure-port
@@ -147,13 +147,13 @@
               (bitwise-and perms)
               ((negate zero?)))))
 
-    ; emote name -> emote id
+    ;; emote name -> emote id
     (define emote-lookup-cache (make-hash))
 
-    ; set of emote ids known by the bot
+    ;; set of emote ids known by the bot
     (define known-emotes (mutable-set))
 
-    ; emote id -> bytes
+    ;; emote id -> bytes
     (define emote-image-cache (make-hash))
 
     (define/public (get-enrich-context)
@@ -171,8 +171,8 @@
          emote-image-cache
          id
          (thunk
-          ; Is this an emote that this bot has encountered?
-          ; If not, don't bother requesting it and just return #f
+          ;; Is this an emote that this bot has encountered?
+          ;; If not, don't bother requesting it and just return #f
           (and (set-member? known-emotes id)
                (let ([data (get-emote-image id)])
                  (and (positive? (bytes-length data))
@@ -272,8 +272,8 @@
       (rc:start-client client))
 
     (define (guild-create _ws-client _client guild)
-      ; eagerly fill all the emote mappings for each guild, so we don't need to touch the
-      ; network when tricks call emote-id
+      ;; eagerly fill all the emote mappings for each guild, so we don't need to touch the
+      ;; network when tricks call emote-id
       (let ([known (mutable-set)])
         (for ([emote (in-list (hash-ref guild 'emojis null))])
           (hash-set! emote-lookup-cache (hash-ref emote 'name) (hash-ref emote 'id))
@@ -521,10 +521,10 @@
 
         (define (parse-command content)
           (cond
-            ; if trick-prefix, return (call-trick rest)
+            ;; if trick-prefix, return (call-trick rest)
             [(string-prefix? content trick-prefix)
              (cons call-trick (strip-trim content trick-prefix))]
-            ; if prefix, find the command or fall through
+            ;; if prefix, find the command or fall through
             [(and
               (string-prefix? content bot-prefix)
               (let ()
@@ -532,7 +532,7 @@
                   (split-once (strip-trim content bot-prefix)))
                 (define found (hash-ref command-table command #f))
                 (and found (cons found (string-trim args)))))]
-            ; return falsey value for func
+            ;; return falsey value for func
             [else (cons #f content)]))
 
         parse-command))
