@@ -153,8 +153,16 @@
     ;; set of emote ids known by the bot
     (define known-emotes (mutable-set))
 
-    ;; emote id -> bytes
-    (define emote-image-cache (make-hash))
+    (define emote-image-cache
+      (make-expiring-cache
+       current-inexact-monotonic-milliseconds
+       get-emote-image
+       (* 10 60 1000))) ;; 10 min as ms
+    (thread-loop
+     (sleep 30)
+     (define purged (length (expiring-cache-purge emote-image-cache)))
+     (when (> purged 0)
+       (log-r16-debug "Purged ~a emote image bytestrings" purged)))
 
     (define/public (get-enrich-context)
       (define deleted-box (current-deleted-box))
@@ -167,16 +175,10 @@
 
       (define/contract (emote-image id)
         (-> string? (or/c bytes? #f))
-        (hash-ref!
-         emote-image-cache
-         id
-         (thunk
-          ;; Is this an emote that this bot has encountered?
-          ;; If not, don't bother requesting it and just return #f
-          (and (set-member? known-emotes id)
-               (let ([data (get-emote-image id)])
-                 (and (positive? (bytes-length data))
-                      data))))))
+        (and (set-member? known-emotes id)
+             (let ([data (expiring-cache-get emote-image-cache id)])
+               (and (positive? (bytes-length data))
+                    data))))
 
       (define/contract (make-attachment data name type)
         (-> bytes? (or/c string? bytes?) (or/c symbol? string? bytes?) http:attachment?)
