@@ -110,7 +110,7 @@
          (hash-ref message 'id))))
 
     (define/off-thread (get-emote-image id)
-      (with-handlers ([exn:fail? (const #f)])
+      (with-handlers ([exn:fail? (const #"")])
         ; TODO this only uses PNG, racket-cord needs to expose an animated field on emoji
         (~> (~a "https://cdn.discordapp.com/emojis/" id ".png?v=1")
             string->url
@@ -173,16 +173,12 @@
          emote-image-cache
          id
          (thunk
-          (let/cc return
-            ; Is this an emote that this bot has encountered?
-            ; If not, don't bother requesting it and just return #f
-            (unless (set-member? known-emotes id)
-              (return #f))
-            (define data (get-emote-image id))
-            ; If empty byte string returned, return #f
-            (unless (and data (positive? (bytes-length data)))
-              (return #f))
-            data))))
+          ; Is this an emote that this bot has encountered?
+          ; If not, don't bother requesting it and just return #f
+          (and (set-member? known-emotes id)
+               (let ([data (get-emote-image id)])
+                 (and (positive? (bytes-length data))
+                      data))))))
 
       (define/contract (make-attachment data name type)
         (-> bytes? (or/c string? bytes?) (or/c symbol? string? bytes?) http:attachment?)
@@ -192,16 +188,10 @@
       (define reply-attachment-count (length reply-message-attachments))
 
       (define (fetch-attachment attachments index)
-        (let/cc return
-          (when (>= index (length attachments))
-            (return #f))
-          (define attachment (list-ref attachments index))
-          #; ;; is an attachment size cap necessary?
-          (when (> (hash-ref attachment 'size) OPEN_ATTACHMENT_MAX_SIZE_BYTES)
-            (return #f))
-          (open-attachment-url
-           (current-custodian)
-           (string->url (hash-ref attachment 'url)))))
+        (and (< index (length attachments))
+             (open-attachment-url
+              (current-custodian)
+              (string->url (hash-ref (list-ref attachments index) 'url)))))
 
       (define/contract (open-attachment [index 0])
         (->* () (exact-nonnegative-integer?) (or/c input-port? #f))
