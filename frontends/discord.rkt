@@ -2,6 +2,7 @@
 
 (require
  (only-in net/url get-pure-port string->url)
+ racket/async-channel
  racket/class
  racket/contract
  (only-in racket/format ~a)
@@ -34,24 +35,21 @@
 (define (message-author-id message)
   (hash-ref (hash-ref message 'author) 'id))
 
+; Defines a function that delegates to an external worker thread.
+; Used to expose limited IO capabilities to inside of a sandbox, as body
+; runs outside of the sandbox
 (define-syntax-rule (define/off-thread (name args ...)
                       body ...)
   (begin
     (define worker-thread
       (thread-loop
-       (match (thread-receive)
-         [(vector chan args ...)
-          (define res (let () body ...))
-          (sync/timeout 1 (channel-put-evt chan res))]
-         [_ (void)])))
+       (match-define (vector chan args ...) (thread-receive))
+       (define res (let () body ...))
+       (async-channel-put chan res)))
     (define (name args ...)
-      (define chan (make-channel))
-      (sync
-       chan
-       (guard-evt
-        (thunk
-         (thread-send worker-thread (vector chan args ...))
-         never-evt))))))
+      (define chan (make-async-channel 1))
+      (thread-send worker-thread (vector chan args ...))
+      (async-channel-get chan))))
 
 (define discord-frontend%
   (class* object% [r16-frontend<%>]
