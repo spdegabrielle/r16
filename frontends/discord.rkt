@@ -147,11 +147,11 @@
               (bitwise-and perms)
               ((negate zero?)))))
 
-    ;; emote name -> emote id
-    (define emote-lookup-cache (make-hash))
+    ;; context/guild id -> (emote name -> emote id)
+    (define emote-name-lookup (make-hash))
 
-    ;; set of emote ids known by the bot
-    (define known-emotes (mutable-set))
+    ;; flattened set of all the leaf emote id's in emote-name-lookup, for fast contains
+    (define known-emotes (box (set)))
 
     (define emote-image-cache
       (make-expiring-cache
@@ -173,9 +173,23 @@
       (define message-author (message-author-id message))
       (define channel-id (hash-ref message 'channel_id))
 
+      (define/contract (emote-lookup name)
+        (-> string? (or/c string? #f))
+        (or
+         ;; Check our own guild's emotes first
+         (~> (context-id message)
+             (hash-ref emote-name-lookup _ #hash())
+             (hash-ref _ name #f))
+         ;; Then try other guilds the bot is a member of (in arbitrary order)
+         (for/or ([map (in-hash-values emote-name-lookup)])
+           (hash-ref map name #f))))
+
       (define/contract (emote-image id)
         (-> string? (or/c bytes? #f))
-        (and (set-member? known-emotes id)
+        ;; Check if the emote is known to any of the guilds we're in.
+        ;; This is to prevent tricks from abusing the bot to download unrelated emotes
+        ;; from other servers it's not in.
+        (and (set-member? (unbox known-emotes) id)
              (let ([data (expiring-cache-get emote-image-cache id)])
                (and (positive? (bytes-length data))
                     data))))
@@ -244,7 +258,7 @@
       (lambda (base trick-obj _args _parent-context)
         `(((message-contents       . ,message-contents)
            (message-author         . ,message-author)
-           (emote-lookup           . ,(curry hash-ref emote-lookup-cache))
+           (emote-lookup           . ,emote-lookup)
            (emote-image            . ,emote-image)
            (delete-caller          . ,delete-caller)
            (make-attachment        . ,make-attachment)
@@ -271,17 +285,36 @@
           (loop))))
       (rc:on-event 'raw-message-create client message-received)
       (rc:on-event 'raw-guild-create client guild-create)
+      (rc:on-event 'raw-guild-delete client guild-delete)
+      (rc:on-event 'raw-guild-emojis-update client guild-emojis-update)
       (rc:start-client client))
 
+    (define (extract-emojis data)
+      (for/hash ([emote (in-list (hash-ref data 'emojis null))])
+        (values (hash-ref emote 'name) (hash-ref emote 'id))))
+
+    (define (recompute-known-emotes)
+      (define new (for*/set ([name-to-id (in-hash-values emote-name-lookup)]
+                             [id (in-hash-values name-to-id)])
+                    id))
+      (log-r16-debug "Know of ~a emotes" (set-count new))
+      (set-box! known-emotes new))
+
     (define (guild-create _ws-client _client guild)
-      ;; eagerly fill all the emote mappings for each guild, so we don't need to touch the
-      ;; network when tricks call emote-id
-      (let ([known (mutable-set)])
-        (for ([emote (in-list (hash-ref guild 'emojis null))])
-          (hash-set! emote-lookup-cache (hash-ref emote 'name) (hash-ref emote 'id))
-          (set-add! known (hash-ref emote 'id)))
-        (set-union! known-emotes known)
-        (log-r16-debug "Preloaded ~a emote ID's" (set-count known))))
+      (hash-set! emote-name-lookup
+                 (hash-ref guild 'id)
+                 (extract-emojis guild))
+      (recompute-known-emotes))
+
+    (define (guild-delete _ws-client _client guild)
+      (hash-remove! emote-name-lookup (hash-ref guild 'id))
+      (recompute-known-emotes))
+
+    (define (guild-emojis-update _ws-client _client payload)
+      (hash-set! emote-name-lookup
+                 (hash-ref payload 'guild_id)
+                 (extract-emojis payload))
+      (recompute-known-emotes))
 
     (define (message-received _ws-client _client message)
       (parameterize ([current-message message]
@@ -554,7 +587,7 @@
     (rc:make-client
      token
      #:auto-shard #t
-     #:intents (list rc:intent-guilds rc:intent-guild-messages)))
+     #:intents (list rc:intent-guilds rc:intent-guild-messages rc:intent-guild-emojis)))
   (new discord-frontend%
        [client client]
        [bot-prefix bot-prefix]

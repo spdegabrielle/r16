@@ -104,6 +104,8 @@ Delete the message that invoked this sandbox.
 
 @defproc[(emote-lookup [name string?]) (or/c string? #f)]{
 Function that returns the ID for emote with name @racket[name], or @racket[#f] if it doesn't exist.
+The emotes of the guild that the triggering message was sent in are searched first,
+then the emotes of other guilds the bot is part of are searched in unspecified order.
 }
 
 @defproc[(emote-image [id string?]) (or/c bytes? #f)]{
