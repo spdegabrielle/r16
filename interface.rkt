@@ -31,7 +31,7 @@
     ;; get whether there are sufficient permissions to modify a trick
     [can-modify?        (->m trick? boolean?)]
 
-    ;; start this frontend
+    ;; start this frontend and block on it
     [start (->m any)]))
 
 ;; the r16 backend
@@ -75,10 +75,15 @@
 (define (r16-backend? x)
   (is-a? x r16-backend<%>))
 
+;; The active frontend. Used by the backend to know what frontend it's receiving a
+;; request from. Transient, and should be re-parameterized by each frontend to itself
+;; for each incoming message. Consequently, this should always be set before calling
+;; any backend method.
 (define/contract current-frontend
   (parameter/c (or/c r16-frontend? #f))
   (make-parameter #f))
 
+;; Long-term holder for the backend.
 (define/contract current-backend
   (parameter/c (or/c r16-backend? #f))
   (make-parameter #f))

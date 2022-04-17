@@ -317,7 +317,8 @@
       (recompute-known-emotes))
 
     (define (message-received _ws-client _client message)
-      (parameterize ([current-message message]
+      (parameterize ([current-frontend this]
+                     [current-message message]
                      [current-deleted-box (box #f)]
                      [current-context-id (context-id message)])
         (define content (string-trim (hash-ref message 'content)))
