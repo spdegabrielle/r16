@@ -51,6 +51,33 @@
       (thread-send worker-thread (vector chan args ...))
       (async-channel-get chan))))
 
+(define guild-perms-manager%
+  (class object% 
+    (super-new)
+
+    (init _client guild)
+
+    (define-values (_default-role _roles)
+      (for/fold ([default-perms 0] [role-perms null]) ([role (hash-ref guild 'roles)])
+        (define perms (string->number (hash-ref role 'permissions)))
+        (if (string=? (hash-ref role 'name) "@everyone")
+          (values perms role-perms)
+          (values default-perms (cons (cons (hash-ref role 'id) perms) role-perms)))))
+
+    (field
+      [owner-id (hash-ref guild 'owner_id)]
+      [roles (make-hash _roles)]
+      [default-role _default-role])
+
+    (define/public (check-perms message)
+      (if (string=? owner-id (message-author-id message))
+        -1
+        (and~>> message
+                (hash-ref _ 'member)
+                (hash-ref _ 'roles)
+                (map (lambda (r) (hash-ref roles r 0)))
+                (foldl bitwise-ior default-role))))))
+
 (define discord-frontend%
   (class* object% [r16-frontend<%>]
     (init-field client)
@@ -140,12 +167,9 @@
                                  rc:permission-manage-guild))
       (or
        (equal? (trick-author trick-obj) author-id)
-       (and~> (current-message)
-              (hash-ref _ 'member)
-              (hash-ref _ 'permissions)
-              string->number
-              (bitwise-and perms)
-              ((negate zero?)))))
+       (not (zero? (bitwise-and
+                     perms
+                     (get-perms-for (current-message)))))))
 
     ;; context/guild id -> (emote name -> emote id)
     (define emote-name-lookup (make-hash))
@@ -300,10 +324,19 @@
       (log-r16-debug "Know of ~a emotes" (set-count new))
       (set-box! known-emotes new))
 
+    (define guild-perms-managers (make-hash))
+
+    (define (get-perms-for message)
+      (define manager (hash-ref guild-perms-managers (hash-ref message 'guild_id)))
+      (send manager check-perms message))
+
     (define (guild-create _ws-client _client guild)
       (hash-set! emote-name-lookup
                  (hash-ref guild 'id)
                  (extract-emojis guild))
+      (hash-set! guild-perms-managers
+                 (hash-ref guild 'id)
+                 (make-object guild-perms-manager% _client guild))
       (recompute-known-emotes))
 
     (define (guild-delete _ws-client _client guild)
