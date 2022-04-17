@@ -20,8 +20,8 @@ associated values:
 
 @itemlist[
 @item{@tt{storage}: A string defining the folder in which to store the bot's save data.}
-@item{@tt{frontend}: A nested object. Within that object, the @tt{module} key must have a
-string value that is a module path as in @racket[dynamic-require] which identifies the frontend to run.
+@item{@tt{frontends}: A list of objects. Within each object, the @tt{module} key must have a
+string value that is a module path as in @racket[dynamic-require] which identifies a frontend to run.
 Frontends may require more specific configuration within this object, see the documentation
 of your chosen frontend for more details.}
 ]
@@ -30,10 +30,12 @@ A working default configuration for the Discord frontend:
 @codeblock|{
 {
   "storage": "/home/r16bot/r16_save_data",
-  "frontend": {
-    "module": "r16/frontends/discord",
-    "bot_token": "<your bot token here>"
-  }
+  "frontends": [
+    {
+      "module": "r16/frontends/discord",
+      "bot_token": "<your bot token here>"
+    }
+  ]
 }
 }|
 

@@ -65,33 +65,30 @@
    ;; positional argument names
    '()))
 
-(define (make-frontend config)
-  (define frontend-configs (hash-ref config 'frontends))
-  (unless (= 1 (length frontend-configs))
-    (raise-argument-error "Only one frontend config supported temporarily"))
-  (define frontend-config (car frontend-configs))
+(define (make-frontends config)
+  (map (lambda (frontend-config)
+         (define frontend-module-string
+           (if (string? frontend-config)
+               frontend-config
+               (hash-ref frontend-config 'module)))
 
-  (define frontend-module-string
-    (if (string? frontend-config)
-        frontend-config
-        (hash-ref frontend-config 'module)))
+         (define frontend-module
+           (with-input-from-string
+             frontend-module-string
+             read))
 
-  (define frontend-module
-    (with-input-from-string
-      frontend-module-string
-      read))
+         (define make-frontend
+           (dynamic-require
+            frontend-module
+            'r16-make-frontend
+            (thunk (raise-user-error
+                    (~a "Frontend " frontend-module " does not provide r16-make-frontend")))))
 
-  (define make-frontend
-    (dynamic-require
-     frontend-module
-     'r16-make-frontend
-     (thunk (raise-user-error
-             (~a "Frontend " frontend-module " does not provide r16-make-frontend")))))
-
-  ((contract (-> jsexpr? r16-frontend?) make-frontend
-             frontend-module 'frontend
-             'frontend #f)
-   frontend-config))
+         ((contract (-> jsexpr? r16-frontend?) make-frontend
+                    frontend-module 'frontend
+                    'frontend #f)
+          frontend-config))
+       (hash-ref config 'frontends)))
 
 (define (call-with-sandbox-conf conf f)
   (cond
@@ -119,13 +116,18 @@
    (hash-ref config 'sandbox #f)
    (lambda ()
      (parameterize ([current-backend (new r16% [db db])])
-       (define frontend (make-frontend config))
+       (define frontends (make-frontends config))
        (thread-loop
         (sleep 30)
         (define result (send (current-backend) save))
         (when (exn:fail? result)
           (log-r16-error (~a "Error saving tricks: " result))))
-       (send frontend start)))))
+       (define threads
+         (map (λ (frontend)
+                (thread (thunk (send frontend start))))
+              frontends))
+       ;; Wait til at least one frontend terminates or crashes. TODO improve this.
+       (apply sync threads)))))
 
 (module* main #f
   (main))
