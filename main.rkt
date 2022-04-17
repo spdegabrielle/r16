@@ -26,10 +26,11 @@
 
 (define r16-config?
   (config/c
-   [frontend
-    (or/c readable?
-          (config/c
-           [module readable?]))]
+   [frontends
+    (list/c
+     (or/c readable?
+           (config/c
+            [module readable?])))]
    [storage path-string?]
    #:optional
    [sandbox
@@ -65,7 +66,10 @@
    '()))
 
 (define (make-frontend config)
-  (define frontend-config (hash-ref config 'frontend))
+  (define frontend-configs (hash-ref config 'frontends))
+  (unless (= 1 (length frontend-configs))
+    (raise-argument-error "Only one frontend config supported temporarily"))
+  (define frontend-config (car frontend-configs))
 
   (define frontend-module-string
     (if (string? frontend-config)
@@ -114,14 +118,14 @@
   (call-with-sandbox-conf
    (hash-ref config 'sandbox #f)
    (lambda ()
-    (parameterize ([current-backend (new r16% [db db])]
-                   [current-frontend (make-frontend config)])
-      (thread-loop
-       (sleep 30)
-       (define result (send (current-backend) save))
-       (when (exn:fail? result)
-         (log-r16-error (~a "Error saving tricks: " result))))
-      (send (current-frontend) start)))))
+     (parameterize ([current-backend (new r16% [db db])]
+                    [current-frontend (make-frontend config)])
+       (thread-loop
+        (sleep 30)
+        (define result (send (current-backend) save))
+        (when (exn:fail? result)
+          (log-r16-error (~a "Error saving tricks: " result))))
+       (send (current-frontend) start)))))
 
 (module* main #f
   (main))
