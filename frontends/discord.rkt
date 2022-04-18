@@ -51,35 +51,34 @@
       (thread-send worker-thread (vector chan args ...))
       (async-channel-get chan))))
 
-(define guild-perms-manager%
-  (class object% 
-    (super-new)
+(struct permission-manager
+  (default-role-permission
+    permissions-by-role
+    guild-owner-id))
 
-    (init _client guild)
+(define (make-permission-manager guild)
+  (define-values (default-perms roles)
+    (for/fold ([default-perms 0]
+               [role-perms null])
+              ([role (hash-ref guild 'roles)])
+      (define perms (string->number (hash-ref role 'permissions)))
+      (if (string=? (hash-ref role 'name) "@everyone")
+          (values perms role-perms)
+          (values default-perms (cons (cons (hash-ref role 'id) perms)
+                                      role-perms)))))
+  (permission-manager default-perms (make-hash roles) (hash-ref guild 'owner_id)))
 
-    (define-values (_default-role _roles)
-      (for/fold ([default-perms 0]
-                 [role-perms null])
-                ([role (hash-ref guild 'roles)])
-        (define perms (string->number (hash-ref role 'permissions)))
-        (if (string=? (hash-ref role 'name) "@everyone")
-            (values perms role-perms)
-            (values default-perms (cons (cons (hash-ref role 'id) perms)
-                                        role-perms)))))
-
-    (field
-     [owner-id (hash-ref guild 'owner_id)]
-     [roles (make-hash _roles)]
-     [default-role _default-role])
-
-    (define/public (check-perms message)
-      (if (string=? owner-id (message-author-id message))
-          -1
-          (and~>> message
-                  (hash-ref _ 'member)
-                  (hash-ref _ 'roles)
-                  (map (lambda (r) (hash-ref roles r 0)))
-                  (foldl bitwise-ior default-role))))))
+(define (get-sender-permissions manager message)
+  (define default-role-permission (permission-manager-default-role-permission manager))
+  (define permissions-by-role (permission-manager-permissions-by-role manager))
+  (define owner-id (permission-manager-guild-owner-id manager))
+  (if (string=? owner-id (message-author-id message))
+      -1
+      (and~>> message
+              (hash-ref _ 'member)
+              (hash-ref _ 'roles)
+              (map (λ (r) (hash-ref permissions-by-role r 0)))
+              (foldl bitwise-ior default-role-permission))))
 
 (define discord-frontend%
   (class* object% [r16-frontend<%>]
@@ -331,7 +330,7 @@
 
     (define (get-perms-for message)
       (define manager (hash-ref guild-perms-managers (hash-ref message 'guild_id)))
-      (send manager check-perms message))
+      (get-sender-permissions manager message))
 
     (define (guild-create _ws-client _client guild)
       (hash-set! emote-name-lookup
@@ -339,7 +338,7 @@
                  (extract-emojis guild))
       (hash-set! guild-perms-managers
                  (hash-ref guild 'id)
-                 (make-object guild-perms-manager% _client guild))
+                 (make-permission-manager guild))
       (recompute-known-emotes))
 
     (define (guild-delete _ws-client _client guild)
