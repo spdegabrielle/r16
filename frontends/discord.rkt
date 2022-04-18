@@ -58,25 +58,28 @@
     (init _client guild)
 
     (define-values (_default-role _roles)
-      (for/fold ([default-perms 0] [role-perms null]) ([role (hash-ref guild 'roles)])
+      (for/fold ([default-perms 0]
+                 [role-perms null])
+                ([role (hash-ref guild 'roles)])
         (define perms (string->number (hash-ref role 'permissions)))
         (if (string=? (hash-ref role 'name) "@everyone")
-          (values perms role-perms)
-          (values default-perms (cons (cons (hash-ref role 'id) perms) role-perms)))))
+            (values perms role-perms)
+            (values default-perms (cons (cons (hash-ref role 'id) perms)
+                                        role-perms)))))
 
     (field
-      [owner-id (hash-ref guild 'owner_id)]
-      [roles (make-hash _roles)]
-      [default-role _default-role])
+     [owner-id (hash-ref guild 'owner_id)]
+     [roles (make-hash _roles)]
+     [default-role _default-role])
 
     (define/public (check-perms message)
       (if (string=? owner-id (message-author-id message))
-        -1
-        (and~>> message
-                (hash-ref _ 'member)
-                (hash-ref _ 'roles)
-                (map (lambda (r) (hash-ref roles r 0)))
-                (foldl bitwise-ior default-role))))))
+          -1
+          (and~>> message
+                  (hash-ref _ 'member)
+                  (hash-ref _ 'roles)
+                  (map (lambda (r) (hash-ref roles r 0)))
+                  (foldl bitwise-ior default-role))))))
 
 (define discord-frontend%
   (class* object% [r16-frontend<%>]
