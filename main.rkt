@@ -2,6 +2,7 @@
 #lang racket/base
 
 (require
+ (prefix-in dbg: debugging/server)
  (only-in racket/class new send)
  (only-in racket/cmdline parse-command-line)
  (only-in racket/format ~a)
@@ -33,6 +34,7 @@
             [module readable?])))]
    [storage path-string?]
    #:optional
+   [debugserver boolean?]
    [sandbox
     (config/c
      #:optional
@@ -111,6 +113,9 @@
    (printf "[~a] ~a\n"
            (vector-ref v 0)
            (vector-ref v 1)))
+
+  (when (hash-ref config 'debugserver)
+    (dbg:serve))
 
   (call-with-sandbox-conf
    (hash-ref config 'sandbox #f)

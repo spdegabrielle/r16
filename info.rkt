@@ -2,6 +2,7 @@
 (define collection "r16")
 (define version "0.1")
 (define deps '("base"
+               "dbg"
                "racket-cord"
                "sandbox-lib"
                "slideshow-lib"
