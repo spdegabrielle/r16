@@ -114,7 +114,7 @@
            (vector-ref v 0)
            (vector-ref v 1)))
 
-  (when (hash-ref config 'debugserver)
+  (when (hash-ref config 'debugserver #f)
     (dbg:serve))
 
   (call-with-sandbox-conf
