@@ -11,5 +11,6 @@
                      "rackunit-lib"
                      "scribble-lib"
                      "threading-doc"))
+(define compile-omit-paths '("presentation"))
 (define test-omit-paths '("presentation"))
 (define scribblings '(("scribblings/r16.scrbl" ())))
