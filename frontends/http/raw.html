@@ -1,0 +1,23 @@
+@; Inputs: 'str
+@(define url-regex #px"(([^:/?#]+):)(//([^/?#]*))([^?#]*)(\\?([^#]*))?(#(.*))?")
+<div>
+  @in[line (in-list (string-split str "\n"))]{
+  @(define urls (regexp-match-positions* url-regex line #:match-select car))
+  <div class="mb-6 last:mb-0">
+  @(cond
+     [(null? urls) (list line)]
+     [else
+      (define positions
+        (append*
+         (for/list ([url-pos (in-list urls)])
+           (list (car url-pos) (cdr url-pos)))))
+      (for/list ([start (in-list `(0 ,@positions))]
+                 [end (in-list `(,@positions ,(string-length line)))]
+                 [is-link? (in-cycle (in-list '(#f #t)))])
+        (define v (substring line start end))
+        (if is-link?
+            (xexpr->string `(a ((href ,v) (class "text-blue-500 hover:text-blue-700")) ,v))
+            v))])
+  </div>
+  }
+</div>

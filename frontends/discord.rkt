@@ -447,15 +447,16 @@
         (define (codeblock-quote result)
           (~a "```scheme\n" result "```"))
 
+        (define (error-response err)
+          (list (car err)))
+
         (define/command (call-snippet text)
           " [_code_]:  evaluate [_code_] as a Racket form"
           (with-typing-indicator
             (thunk
              (define result
                (send (current-backend) evaluate (strip-backticks text)))
-             (if (ev:run-result? result)
-                 (format-run-result result)
-                 (list result)))))
+             (result-case format-run-result error-response result))))
 
         (define/command/trick (call-trick name body)
           " [_name_] ...:  invoke the trick [_name_], evaluating its source code in a fresh sandbox"
@@ -463,17 +464,16 @@
             (thunk
              (define result
                (send (current-backend) call name body))
-             (if (ev:run-result? result)
-                 (format-run-result result)
-                 (list result)))))
+             (result-case format-run-result error-response result))))
 
         (define/command/trick (register-trick name body)
           " [_name_] [_code_]:  register [_code_] as a trick with name [_name_]"
-          (list
-           (send (current-backend) register
-                 name (strip-backticks body)
-                 (message-author-id (current-message))
-                 (hash-ref (current-message) 'timestamp))))
+          (define result
+            (send (current-backend) register
+                  name (strip-backticks body)
+                  (message-author-id (current-message))
+                  (hash-ref (current-message) 'timestamp)))
+          (list (result-case cdr cadr result)))
 
         (define/command/trick (show-trick name _body)
           " [_name_]:  show metadata and source for the trick [_name_]"
@@ -494,11 +494,11 @@
 
         (define/command/trick (update-trick name body)
           " [_name_] [_code_]:  change the source of the trick [_name_]; requires ownership or administrator"
-          (list (send (current-backend) update name (strip-backticks body))))
+          (list (result-case cdr cadr (send (current-backend) update name (strip-backticks body)))))
 
         (define/command/trick (delete-trick name _body)
           " [_name_]:  delete the trick [_name_]; requires ownership or administrator and cannot be undone!"
-          (list (send (current-backend) delete name)))
+          (list (result-case cdr cadr (send (current-backend) delete name))))
 
         (define/command (popular text)
           ":  show a leaderboard of popular tricks"

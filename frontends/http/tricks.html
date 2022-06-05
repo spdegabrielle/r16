@@ -1,0 +1,109 @@
+@; No inputs
+@(define popular (send (current-backend) popular))
+<div class="p-12">
+  <h1 class="text-3xl font-bold mb-6">Add trick</h1>
+  <form action="/tricks/submit" method="post" target="_blank" enctype="multipart/form-data">
+    <div class="mb-3">
+      <div class="flex flex-col md:flex-row -m-3">
+        <div class="grow shrink basis-0 p-3">
+          <label class="mb-2 font-bold block" for="name">Trick Name</label>
+          <input class="p-2 border-neutral-100 hover:border-neutral-300 border rounded w-full shadow-inner" 
+                 type="text" id="name" name="name"></input>
+        </div>
+        <div class="grow shrink basis-0 p-3">
+          <label class="mb-2 font-bold block" for="password">Password</label>
+          <input class="p-2 border-neutral-100 hover:border-neutral-300 border rounded w-full shadow-inner" 
+                 type="password" id="password" name="password"></input>
+        </div>
+      </div>
+    </div>
+    <div class="mb-3">
+      <label class="mb-2 font-bold block" for="code">Code</label>
+      <textarea
+        class="font-mono p-2 border-neutral-100 hover:border-neutral-300 border rounded w-full shadow-inner"
+        id="code"
+        name="code"
+        rows="5"
+        cols="60"
+        placeholder="Enter code"
+        spellcheck="false"></textarea>
+    </div>
+    <div>
+      <input class="p-2 bg-green-400 hover:bg-green-500 rounded text-white content-center px-4 py-2 cursor-pointer"
+             type="submit" value="Add"/>
+    </div>
+  </form>
+</div>
+<div class="p-12">
+  <h1 class="text-3xl font-bold mb-6">Registered tricks</h1>
+  <script>
+    let lastTrick = null;
+    function setTrick(trick, soft) {
+      if (trick === null) trick = lastTrick;
+
+      let invocations = trick ? trick.dataset.trickInvocations : "-";
+      document.getElementById("trick-invocations").innerText = invocations;
+
+      let trickSource = document.getElementById("trick-source");
+      let trickName = document.getElementById("trick-name");
+      let trickCall = document.getElementById("trick-call");
+      if (trick) {
+        let name = trick.dataset.trickName;
+        trickSource.href = "/tricks/"+name+".rkt";
+        trickCall.action = "/tricks/"+name;
+        trickName.innerText = name;
+        if (!soft) {
+          if (trick === lastTrick) return;
+          if (lastTrick) {
+            lastTrick.classList.remove("bg-neutral-900");
+            lastTrick.classList.add("bg-neutral-700");
+          }
+          lastTrick = trick;
+          lastTrick.classList.add("bg-neutral-900");
+          lastTrick.classList.remove("bg-neutral-700");
+        }
+      } else {
+        trickSource.href = "";
+        trickCall.action = "";
+        trickName.innerText = "-";
+      }
+    }
+  </script>
+  <div class="mb-6 shadow-lg rounded-lg p-6">
+    <div class="bg-neutral-800 rounded-t-lg w-[calc(100% + 3rem)] -m-6 mb-3 px-6 py-4 text-white md:text-lg font-bold">
+      <span>Trick Name: </span>
+      <code id="trick-name">-</code>
+    </div>
+    <p class="mb-3"><span class="font-bold">Invocations</span>: <span id="trick-invocations">-</span></p>
+    <p class="mb-3"><a class="text-blue-500 hover:text-blue-700 cursor-pointer" id="trick-source">Trick Source</a></p>
+    <form id="trick-call" target="_blank" method="get">
+      <div class="mb-3">
+        <textarea class="font-mono p-2 border-neutral-100 hover:border-neutral-300 border rounded w-full shadow-inner"
+                  name="args"
+                  spellcheck="false"
+                  rows="1"
+                  placeholder="Enter arguments"></textarea>
+      </div>
+      <input class="p-2 bg-green-400 hover:bg-green-500 rounded text-white content-center px-4 py-2 cursor-pointer"
+             type="submit" value="Call"/>
+    </form>
+  </div>
+  <div id="trick-list" class="flex flex-wrap">
+    @in[trick-pair (in-list popular)]{
+    @(define name (xexpr->string (car trick-pair)))
+    @(define trick-v (cdr trick-pair))
+    <button class="mr-2 mb-2 shadow px-3 py-2 bg-neutral-700 hover:bg-neutral-800 rounded text-white trick"
+            data-trick-name="@|name|"
+            data-trick-invocations="@(trick-invocations trick-v)"
+            onmouseover="setTrick(this, true)"
+            onmouseout="setTrick(null, true)"
+            onclick="setTrick(this, false)">
+      <code class="card-header-title has-text-white">@|name|</code>
+    </button>
+  }
+  </div>
+  <script>
+    let trickList = document.getElementById("trick-list");
+    if (trickList.children.length) setTrick(trickList.children[0], false);
+  </script>
+</div>

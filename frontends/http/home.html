@@ -1,0 +1,5 @@
+@; No inputs
+<div class="p-12">
+  <h1 class="text-3xl font-bold mb-6">Stats</h1>
+  @(format-for-html (send (current-backend) stats))
+</div>

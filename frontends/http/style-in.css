@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.toggled .togglable { display: none; }
+.togglable-inverse { display: none; }
+.toggled .togglable-inverse { display: inline; }
+
+.trick > .trick-info {
+    max-width: 0;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+}
+
+.trick:hover > .trick-info {
+    max-width: 2000px;
+    max-height: 300px;
+    opacity: 1;
+}

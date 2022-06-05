@@ -70,7 +70,7 @@
                       enrich-context
                       (current-context-id)
                       #f "" "" #f))
-      (ev:run code ev-ctx response?))
+      (cons 'ok (ev:run code ev-ctx response?)))
 
     (define/public (call name args)
       (define ctx-id (current-context-id))
@@ -89,9 +89,9 @@
                          (current-context-id)
                          trick-obj name args #f))
          (define code (trick-body trick-obj))
-         (ev:run code ev-ctx response?)]
+         (cons 'ok (ev:run code ev-ctx response?))]
         [else
-         (~a "Trick " name " doesn't exist!")]))
+         (list 'err (~a "Trick " name " doesn't exist!") 'no-such-trick)]))
 
     (define/public (delete name)
       (define ctx-id (current-context-id))
@@ -99,22 +99,22 @@
       (define frontend (current-frontend))
       (cond
         [(not trick-obj)
-         (~a "Trick " name " doesn't exist!")]
+         (list 'err (~a "Trick " name " doesn't exist!") 'no-such-trick)]
         [(db:remove-trick!
           db ctx-id name
           (lambda (t) (send frontend can-modify? t)))
-         (~a "Successfully removed trick " name "!")]
+         (cons 'ok (~a "Successfully removed trick " name "!"))]
         [else
-         (~a "You cannot modify trick " name "!")]))
+         (list 'err (~a "You cannot modify trick " name "!") 'missing-permissions)]))
 
     (define/public (register name code author timestamp)
       (cond
         [(zero? (string-length code))
-         (~a "Trick " name " needs a body!")]
+         (list 'err (~a "Trick " name " needs a body!") 'needs-body)]
         [(db:add-trick!
           db (current-context-id) name
           (thunk (trick author code timestamp (make-hash) 0)))
-         (~a "Successfully registered trick " name "!")]
+         (cons 'ok (~a "Successfully registered trick " name "!"))]
         [else (update name code)]))
 
     (define/public (update name code)
@@ -123,9 +123,9 @@
       (define frontend (current-frontend))
       (cond
         [(not trick-obj)
-         (~a "Trick " name " doesn't exist!")]
+         (list 'err (~a "Trick " name " doesn't exist!") 'no-such-trick)]
         [(zero? (string-length code))
-         (~a "Trick " name " needs a body!")]
+         (list 'err (~a "Trick " name " needs a body!") 'needs-body)]
         [(db:update-trick!
           db ctx-id name
           (lambda (trick-obj)
@@ -136,7 +136,9 @@
                    (trick-invocations trick-obj)))
           (lambda (t)
             (send frontend can-modify? t)))
-         (~a "Successfully updated trick " name "!")]))
+         (cons 'ok (~a "Successfully updated trick " name "!"))]
+        [else
+         (list 'err (~a "You cannot modify trick " name "!") 'missing-permissions)]))
 
     (define/public (lookup name)
       (db:get-trick db (current-context-id) name))

@@ -1,0 +1,43 @@
+@; Inputs: 'title 'navbar? 'body
+<!DOCTYPE html>
+<html lang="en" class="text-[16px] text-slate-700 bg-neutral-50">
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>@|title|</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons"/>
+    <link rel="stylesheet" href="/style.css"></style>
+  </head>
+  <body>
+    @when[navbar?]{
+    @list{
+    <navbar class="bg-neutral-700 text-white flex items-stretch min-h-[3.25rem]"
+            role="navigation"
+            aria-label="main navigation">
+      <div class="flex items-stretch">
+        <p class="flex items-center py-2 px-3">
+          <img class="w-8 h-8" src="/icon.svg"></img>
+        </p>
+      </div>
+      <div class="flex items-stretch grow">
+        <div class="flex items-stretch justify-start mr-auto">
+          <a class="flex items-center py-2 px-3 hover:bg-neutral-800" href="/">Home</a>
+          <a class="flex items-center py-2 px-3 hover:bg-neutral-800" href="/tricks">Tricks</a>
+        </div>
+        <div class="flex items-stretch justify-end ml-auto">
+          <a class="flex items-center py-2 px-3 hover:bg-neutral-800" href="https://sr.ht/~williewillus/r16">Source</a>
+        </div>
+      </div>
+    </navbar>
+    }
+    }
+    <div class="w-full bg-white">
+      <div class="mx-auto 2xl:max-w-screen-xl xl:max-w-screen-lg lg:max-w-screen-md">@|body|</div>
+    </div>
+    <footer class="bg-neutral-50">
+      <div class="p-12 text-center">
+        @(format-for-html (send (current-backend) about))
+      </div>
+    </footer>
+  </body>
+</html>

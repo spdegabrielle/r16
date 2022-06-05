@@ -1,0 +1,40 @@
+@; Inputs: 'trick-name 'stderr 'stdout 'results
+@; TODO: limits on output length
+@(define trick-name-esc (xexpr->string trick-name))
+@(local-require racket/port)
+@(define description
+   (with-output-to-string
+     (lambda ()
+       (when stderr
+         (display stderr))
+       (unless (zero? (string-length stdout))
+         (display stdout))
+       (for ([r (in-list results)])
+         (unless (image? r)
+           (displayln r))))))
+@(define head
+   @list{
+     <title>@|trick-name-esc|</title>
+     <meta name="viewport" content="width=device-width, initial-scale=1"/>
+     <meta property="og:title" content="@(xml-attribute-encode trick-name)">
+     <meta property="og:type" content="website">
+     <meta property="og:description" content="@(xml-attribute-encode description)">
+     @(when stderr
+        @list{<meta name="theme-color" content="#FF0000">})
+   })
+@(define body
+   (list
+    (when stderr @list{<pre style="color:red;">@(xexpr->string stderr)</pre>})
+    (unless (zero? (string-length stdout)) @list{<pre>@(xexpr->string stdout)</pre>})
+    (for/list ([r (in-list results)])
+      (cond
+        [(image? r) @list{<img src="data:image/png;base64,@(base64-encode (image-bytes r))"></img>}]
+        [else @list{<pre>@(xexpr->string r)</pre>}]))))
+
+<!DOCTYPE html>
+<head>
+@|head|
+</head>
+<body>
+@|body|
+</body>

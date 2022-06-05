@@ -3,13 +3,15 @@
 (require
  racket/class
  racket/contract
+ "result.rkt"
  (only-in "evaluator.rkt" definitions? run-result?)
  "common.rkt")
 
 (provide r16-backend? r16-frontend?
          r16-backend<%> r16-frontend<%>
          current-backend current-frontend
-         current-context-id)
+         current-context-id
+         (all-from-out "result.rkt"))
 
 ;; an r16 frontend
 (define r16-frontend<%>
@@ -38,21 +40,34 @@
 (define r16-backend<%>
   (interface ()
     ;; evaluate a code snippet, returning either an error message or a run result
-    [evaluate (#;code string? . ->m . (or/c string? run-result?))]
+    [evaluate (#;code string? . ->m .
+               (result/c run-result?
+                         (error/c)))]
 
-    ;; call a trick with arguments, returning either an error message or a run result
-    [call     (#;trick string? #;args string? . ->m . (or/c string? run-result?))]
+    ;; call a trick with arguments, returning either an error or a run result
+    [call     (#;trick string? #;args string? . ->m .
+               (result/c run-result?
+                         (error/c (no-such-trick))))]
 
     ;; delete a trick, returning an error or success message
-    [delete   (#;trick string? . ->m . string?)]
+    [delete   (#;trick string? . ->m .
+               (result/c string?
+                         (error/c (no-such-trick)
+                                  (missing-permissions))))]
 
     ;; register a trick, returning an error or success message
     [register (#;trick string? #;code string?
-               #;author string? #;timestamp string?
-               . ->m . string?)]
+               #;author string? #;timestamp string? . ->m .
+               (result/c string?
+                         (error/c (needs-body)
+                                  (missing-permissions))))]
 
     ;; update a trick, returning an error or success message
-    [update   (#;trick string? #;code string? . ->m . string?)]
+    [update   (#;trick string? #;code string? . ->m .
+               (result/c string?
+                         (error/c (no-such-trick)
+                                  (needs-body)
+                                  (missing-permissions))))]
 
     ;; look up a trick by name
     [lookup   (#;trick string? . ->m . (or/c trick? #f))]
