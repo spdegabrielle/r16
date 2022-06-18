@@ -9,11 +9,11 @@
  racket/include
  racket/port
 
- "../../common.rkt"
- "../../config.rkt"
- "../../log.rkt"
- (prefix-in ev: "../../evaluator.rkt")
- "../../interface.rkt"
+ "../common.rkt"
+ "../config.rkt"
+ "../log.rkt"
+ (prefix-in ev: "../evaluator.rkt")
+ "../interface.rkt"
 
  xml
  net/base64
@@ -31,10 +31,10 @@
 
 (provide r16-make-frontend)
 
-(define-for-syntax use-reincludes?
+(define-for-syntax hotload-templates
   (environment-variables-ref
    (current-environment-variables)
-   #"R16_REINCLUDE_TEMPLATES"))
+   #"R16_HOTLOAD_TEMPLATES"))
 
 (define-syntax (syntax-relative-path stx)
   (syntax-case stx ()
@@ -47,7 +47,7 @@
 (define-syntax (include-bytes stx)
   (syntax-case stx ()
     [(_ path)
-     (if use-reincludes?
+     (if hotload-templates
          (quasisyntax/loc stx
            (with-input-from-file (syntax-relative-path path) port->bytes))
          (quasisyntax/loc stx
@@ -63,7 +63,7 @@
 (define-syntax (maybe-define-namespace-anchor stx)
   (syntax-case stx ()
     [(_ name)
-     (if use-reincludes?
+     (if hotload-templates
          (quasisyntax/loc stx
            (define-namespace-anchor name))
          #'(begin))]))
@@ -73,7 +73,7 @@
 (define-syntax (include-template* stx)
   (syntax-case stx ()
     [(_ path args ...)
-     (if use-reincludes?
+     (if hotload-templates
          (quasisyntax/loc stx
            (let ([namespace (namespace-anchor->namespace anchor)])
              (namespace-set-variable-value!
@@ -89,24 +89,24 @@
 (define (simple-response code msg)
   (define title msg)
   (define navbar? #t)
-  (define body (include-template* "simple.html" msg))
+  (define body (include-template* "http/simple.html" msg))
   (response/full
    code #f
    (current-seconds) TEXT/HTML-MIME-TYPE
    null
    (list
     (string->bytes/utf-8
-     (include-template* "base.html" title navbar? body)))))
+     (include-template* "http/base.html" title navbar? body)))))
 
 (define (format-for-html str)
-  (include-template* "raw.html" str))
+  (include-template* "http/raw.html" str))
 
 (define (response/html #:title title #:navbar? [navbar? #f] . body)
   (response/full
    200 #f
    (current-seconds) TEXT/HTML-MIME-TYPE
    null
-   (list (string->bytes/utf-8 (include-template* "base.html" title navbar? body)))))
+   (list (string->bytes/utf-8 (include-template* "http/base.html" title navbar? body)))))
 
 (define http-frontend
   (class* object% [r16-frontend<%>]
@@ -130,6 +130,7 @@
       (parameterize ([current-frontend this])
         (serve
          #:dispatch (dispatch/servlet handle-request)
+         #:listen-ip "127.0.0.1"
          #:port port)
         (do-not-return)))
 
@@ -183,7 +184,7 @@
            (response/html
             #:title "Tricks"
             #:navbar? #t
-            (include-template* "tricks.html"))]
+            (include-template* "http/tricks.html"))]
 
           [[#"GET" (list (path/param "tricks" _)
                          (path/param (pregexp "^([a-zA-Z_\\-0-9]+)\\.rkt$" (list _ trick-name)) _))]
@@ -217,7 +218,7 @@
                   null
                   (list (string->bytes/utf-8
                          (include-template*
-                          "result.html"
+                          "http/result.html"
                           trick-name
                           stderr
                           stdout
@@ -232,27 +233,27 @@
             200 #f
             (current-seconds) #"text/css"
             null
-            (list (include-bytes "style.css")))]
+            (list (include-bytes "http/style.css")))]
 
           [[#"GET" (list (path/param "favicon.ico" _))]
            (response/full
             200 #f
             (current-seconds) #"image/x-icon"
             null
-            (list (include-bytes "favicon.ico")))]
+            (list (include-bytes "http/favicon.ico")))]
 
           [[#"GET" (list (path/param "icon.svg" _))]
            (response/full
             200 #f
             (current-seconds) #"image/svg+xml"
             null
-            (list (include-bytes "icon.svg")))]
+            (list (include-bytes "http/icon.svg")))]
 
           [[#"GET" (list)]
            (response/html
             #:title "r16"
             #:navbar? #t
-            (include-template* "home.html"))]
+            (include-template* "http/home.html"))]
 
           [[#"GET" _]
            (simple-response 404 #"404 Not Found")]))

@@ -28,7 +28,7 @@
 (define r16-config?
   (config/c
    [frontends
-    (list/c
+    (listof
      (or/c readable?
            (config/c
             [module readable?])))]

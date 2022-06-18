@@ -6,8 +6,8 @@
 
 R16 is a "trick bot". It saves snippets of code, which can then be recalled and executed on user-provided input.
 
-As of the time of writing, there exists one frontend, for Discord. More are planned, so
-this manual is structured by frontend.
+This manual is structured by frontend. A frontend is a way through which users can interact with
+the bot.
 
 @section{Configuration}
 
@@ -95,7 +95,7 @@ The @tt{frontend} object in the configuration file can have the following keys a
 @item{@tt{trick_prefix} is a string specifying the bot's shorthand prefix. If not present, defaults to @code{"!!"}.}
 ]
 
-@subsection{Trick Environment Extensions}
+@subsection{Discord Trick Environment Extensions}
 
 In additional to the bindings described above, the following items are available in the
 trick environment.
@@ -173,4 +173,31 @@ The number of files attached to the message that the invoking message replied to
 
 @defthing[reply-contents (or/c string? #f)]{
 The full message content of the message that the invoking message replied to.
+}
+
+@section{HTTP Frontend}
+
+The HTTP frontend turns R16 into a web application. On startup, R16 starts an HTTP server
+on the local machine at the given port, which allows tricks to be registered and
+called from HTML forms.
+
+Caveat: R16 will only bind to localhost, and will not use TLS. Please set up a reverse
+proxy with TLS termination in front of the bot if you plan to expose it to the internet.
+
+@subsection{HTTP Frontend Configuration}
+The @tt{frontend} object in the configuration file can have the following keys and values:
+@itemlist[
+@item{@tt{module} must be the string @racket["r16/frontends/http"].}
+@item{@tt{port} is an integer specifying which port to bind the web server to. If not
+present, defaults to @racket[8080].}
+]
+
+@subsection{HTTP Trick Environment Extensions}
+In additional to the bindings described above, the following items are available in the
+trick environment.
+
+@defproc[(make-image [png-bytes bytes?]) any]{
+Returns an opaque value representing a PNG image containing the given bytes. If a trick
+invocation returns such a value, then the image is rendered to the user inline in the
+browser.
 }
