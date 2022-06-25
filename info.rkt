@@ -6,8 +6,10 @@
                "racket-cord"
                "sandbox-lib"
                "slideshow-lib"
-               "threading-lib"))
+               "threading-lib"
+               "web-server-lib"))
 (define build-deps '("racket-doc"
+                     "draw-lib" ;; evaluator unit tests. TODO try to get rid of this
                      "rackunit-lib"
                      "scribble-lib"
                      "threading-doc"))
