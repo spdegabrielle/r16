@@ -195,8 +195,8 @@
      (check-true (add-trick! db context-id trick-id (thunk (fake-trick "foo"))))
      (check-false (add-trick! db context-id trick-id (thunk (fake-trick "foo2"))))
 
-     (check-false (update-trick! db context-id "nonexistent-id" values (const #t))
-                  (check-false (remove-trick! db context-id "nonexistent-id" (const #t))))
+     (check-false (update-trick! db context-id "nonexistent-id" values (const #t)))
+     (check-false (remove-trick! db context-id "nonexistent-id" (const #t)))
 
      (delete-directory/files path)))
 
