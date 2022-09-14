@@ -57,7 +57,7 @@
 
     ;; register a trick, returning an error or success message
     [register (#;trick string? #;code string?
-               #;author string? #;timestamp string? . ->m .
+               #;author string? #;timestamp exact-integer? . ->m .
                (result/c string?
                          (error/c (needs-body)
                                   (missing-permissions))))]

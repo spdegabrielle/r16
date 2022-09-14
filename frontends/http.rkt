@@ -168,7 +168,7 @@
                        [(cons 'ok msg) (simple-response 200 (string->bytes/utf-8 msg))]
                        [(list* 'err msg _) (simple-response 400 (string->bytes/utf-8 msg))])]
                     [else
-                     (match (send (current-backend) register name code hashed-pass (number->string (current-seconds)))
+                     (match (send (current-backend) register name code hashed-pass (current-seconds))
                        [(cons 'ok _)
                         (response/full
                          303 #"See Other"

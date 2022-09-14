@@ -21,6 +21,7 @@
  (prefix-in ev: "../evaluator.rkt")
  "../interface.rkt"
  "../log.rkt"
+ "../timestamp.rkt"
  "../utils.rkt")
 
 (provide r16-make-frontend)
@@ -472,7 +473,7 @@
             (send (current-backend) register
                   name (strip-backticks body)
                   (message-author-id (current-message))
-                  (hash-ref (current-message) 'timestamp)))
+                  (discord-timestamp-to-unix (hash-ref (current-message) 'timestamp))))
           (list (result-case cdr cadr result)))
 
         (define/command/trick (show-trick name _body)
