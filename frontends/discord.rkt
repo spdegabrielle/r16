@@ -507,7 +507,7 @@
           (define tricks (send (current-backend) search (pregexp query)))
           (if (null? tricks)
               '("No matching tricks found")
-              (list (string-join (sort tricks) ", "))))
+              (list (string-join (sort tricks string<?) ", "))))
 
         (define/command (popular text)
           ":  show a leaderboard of popular tricks"
