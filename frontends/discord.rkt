@@ -484,11 +484,12 @@
                (format
                 (~a
                  #:separator "\n"
-                 "Trick **~a**, created by <@~a>, has been invoked `~a` times."
+                 "Trick **~a**, created by <@~a> on <t:~a>, has been invoked `~a` times."
                  "__Source code:__"
                  "~a")
                 name
                 (trick-author trick-obj)
+                (trick-created trick-obj)
                 (trick-invocations trick-obj)
                 (codeblock-quote (trick-body trick-obj)))
                (~a "Trick " name " doesn't exist!"))))
