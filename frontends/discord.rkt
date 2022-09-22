@@ -474,7 +474,7 @@
                   name (strip-backticks body)
                   (message-author-id (current-message))
                   (discord-timestamp-to-unix (hash-ref (current-message) 'timestamp))))
-          (result-case values error-response result))
+          (result-case list error-response result))
 
         (define/command/trick (show-trick name _body)
           " [_name_]:  show metadata and source for the trick [_name_]"
@@ -495,11 +495,11 @@
 
         (define/command/trick (update-trick name body)
           " [_name_] [_code_]:  change the source of the trick [_name_]; requires ownership or administrator"
-          (result-case values error-response (send (current-backend) update name (strip-backticks body))))
+          (result-case list error-response (send (current-backend) update name (strip-backticks body))))
 
         (define/command/trick (delete-trick name _body)
           " [_name_]:  delete the trick [_name_]; requires ownership or administrator and cannot be undone!"
-          (result-case values error-response (send (current-backend) delete name)))
+          (result-case list error-response (send (current-backend) delete name)))
 
         (define/command (popular text)
           ":  show a leaderboard of popular tricks"
