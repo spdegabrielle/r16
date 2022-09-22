@@ -193,5 +193,5 @@
 (define (cmp-tricks lt rt)
   (let ([l (cdr lt)] [r (cdr rt)])
     (if (= (trick-invocations l) (trick-invocations r))
-        (string>? (trick-created l) (trick-created r))
+        (> (trick-created l) (trick-created r))
         (> (trick-invocations l) (trick-invocations r)))))
