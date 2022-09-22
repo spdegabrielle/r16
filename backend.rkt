@@ -143,6 +143,10 @@
     (define/public (lookup name)
       (db:get-trick db (current-context-id) name))
 
+    (define/public (search re)
+      (filter (λ (n) (regexp-match? re n))
+              (db:list-tricks db (current-context-id))))
+
     (define/public (popular)
       (sort (db:all-tricks db (current-context-id)) cmp-tricks))
 

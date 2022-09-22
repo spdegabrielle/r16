@@ -501,6 +501,13 @@
           " [_name_]:  delete the trick [_name_]; requires ownership or administrator and cannot be undone!"
           (result-case list error-response (send (current-backend) delete name)))
 
+        (define/command (search query)
+          " [_query_]:  list tricks whose names match the Racket pregexp [_query_]"
+          (define tricks (send (current-backend) search (pregexp query)))
+          (if (null? tricks)
+              '("No matching tricks found")
+              (list (string-join (sort tricks) ", "))))
+
         (define/command (popular text)
           ":  show a leaderboard of popular tricks"
           (define leaderboard-size 10)
@@ -555,6 +562,7 @@
            "delete" delete-trick
 
            "popular" popular
+           "search" search
            "about" about
            "help" help
            "stats" stats
@@ -580,6 +588,7 @@
              ,(format-command-help "delete")
              ""
              ,(format-command-help "popular")
+             ,(format-command-help "search")
              ,(format-command-help "about")
              ,(format-command-help "help")
              ,(format-command-help "stats")

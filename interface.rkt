@@ -72,6 +72,9 @@
     ;; look up a trick by name
     [lookup   (#;trick string? . ->m . (or/c trick? #f))]
 
+    ;; return list of trick names that match the given regexp
+    [search (regexp? . ->m . (listof string?))]
+
     ;; list the registered tricks, sorted by invocation count
     [popular  (->m (listof (cons/c string? trick?)))]
 
