@@ -130,12 +130,12 @@
             proc
             (thunk (change-counter channel -1))))))
 
-    (define/off-thread (do-delete-message message)
+    (define/off-thread (do-delete-message channel-id message-id)
       (with-handlers ([exn:fail:network? identity])
         (http:delete-message
          client
-         (hash-ref message 'channel_id)
-         (hash-ref message 'id))))
+         channel-id
+         message-id)))
 
     (define/off-thread (get-emote-image id)
       (with-handlers ([exn:fail? (const #"")])
@@ -184,11 +184,24 @@
       (make-expiring-cache
        current-inexact-monotonic-milliseconds
        (* 10 60 1000))) ;; 10 min as ms
+
+    ;; cache of msgid -> (channelid . msgid) of recent invocations to
+    ;; their responses. Allows the response to be deleted when the invocation is deleted.
+    ;; Note that message ids are globally unique on Discord, but we need to keep the
+    ;; channel id around for the value, because the http api requires it
+    (define recent-messages-cache
+      (make-expiring-cache
+       current-inexact-monotonic-milliseconds
+       (* 5 60 1000))) ;; 5 min as ms
+
     (thread-loop
      (sleep 30)
-     (define purged (length (expiring-cache-purge emote-image-cache)))
-     (when (> purged 0)
-       (log-r16-debug "Purged ~a emote image bytestrings" purged)))
+     (let ([purged (length (expiring-cache-purge emote-image-cache))])
+       (when (> purged 0)
+         (log-r16-debug "Purged ~a emote image bytestrings" purged)))
+     (let ([purged (length (expiring-cache-purge recent-messages-cache))])
+       (when (> purged 0)
+         (log-r16-debug "Purged ~a recent messages" purged))))
 
     (define/public (get-enrich-context)
       (define deleted-box (current-deleted-box))
@@ -216,7 +229,10 @@
         ;; This is to prevent tricks from abusing the bot to download unrelated emotes
         ;; from other servers it's not in.
         (and (set-member? (unbox known-emotes) id)
-             (let ([data (expiring-cache-get emote-image-cache id get-emote-image)])
+             (let ([data (expiring-cache-refresh
+                          emote-image-cache
+                          id
+                          get-emote-image)])
                (and (positive? (bytes-length data))
                     data))))
 
@@ -273,7 +289,8 @@
 
       (define (delete-caller)
         (when (box-cas! deleted-box #f #t)
-          (do-delete-message message))
+          (do-delete-message (hash-ref message 'channel_id)
+                             (hash-ref message 'id)))
         (void))
 
       (define reply-contents
@@ -313,6 +330,8 @@
       (rc:on-event 'raw-guild-create client guild-create)
       (rc:on-event 'raw-guild-delete client guild-delete)
       (rc:on-event 'raw-guild-emojis-update client guild-emojis-update)
+      (rc:on-event 'raw-message-delete client message-delete)
+      (rc:on-event 'raw-message-delete-bulk client message-delete-bulk)
       (rc:start-client client))
 
     (define (extract-emojis data)
@@ -351,6 +370,23 @@
                  (extract-emojis payload))
       (recompute-known-emotes))
 
+    (define (message-delete-impl invoking-message-id)
+      (define value (expiring-cache-get recent-messages-cache invoking-message-id))
+      (when value
+        (define response-channel-id (car value))
+        (define response-message-id (cdr value))
+        (do-delete-message response-channel-id response-message-id))
+      (void))
+
+    (define (message-delete _ws-client _client payload)
+      (message-delete-impl (hash-ref payload 'id)))
+
+    (define (message-delete-bulk _ws-client _client payload)
+      ;; XXX: this does all the calls to message-delete-impl serially when they could
+      ;; probably be issued in parallel
+      (for ([id (in-list (hash-ref payload 'ids))])
+        (message-delete-impl id)))
+
     (define (message-received _ws-client _client message)
       (parameterize ([current-frontend this]
                      [current-message message]
@@ -372,10 +408,17 @@
                     (log-r16-error (~a "Internal error:\n" error-message))
                     (list (~a ":warning: Internal error:\n" error-message)))])
                 (func func-args)))
-            (create-message-with-contents
-             channel
-             (and (not (unbox (current-deleted-box))) message)
-             contents)))))
+            (define not-deleted (not (unbox (current-deleted-box))))
+            (define response
+              (create-message-with-contents
+               channel
+               (and not-deleted message)
+               contents))
+            (when (and not-deleted response)
+              (define response-id (hash-ref response 'id))
+              (expiring-cache-put recent-messages-cache
+                                  (hash-ref message 'id)
+                                  (cons channel response-id)))))))
 
     (define (create-message-with-contents channel reply-message contents)
       (define char-cap 2000)
