@@ -6,6 +6,7 @@
 (provide thread-loop
          make-expiring-cache
          expiring-cache-purge
+         expiring-cache-put
          expiring-cache-get)
 
 (define-syntax (thread-loop stx)
@@ -20,17 +21,15 @@
 
 (struct expiring-cache
   (timestamp-getter
-   compute-value ; k -> v
    entries-lock
    entries ; hash, k -> (timestamp . v)
    ttl))
 
 ; NB: ttl and timestamp-getter can be in any units, as long as they are consistent with each other
-(define/contract (make-expiring-cache timestamp-getter compute-value ttl)
-  (-> (-> real?) (-> any/c any/c) real? expiring-cache?)
+(define/contract (make-expiring-cache timestamp-getter ttl)
+  (-> (-> real?) real? expiring-cache?)
   (expiring-cache
    timestamp-getter
-   compute-value
    (make-semaphore 1)
    (make-hash)
    ttl))
@@ -56,24 +55,36 @@
        (hash-remove! entries key))
      keys-to-remove)))
 
-;; get the cached entry for k, computing it if not present.
-;; if k is already in cache, its expiration timer is refreshed.
-(define/contract (expiring-cache-get cache k)
-  (-> expiring-cache? any/c any/c)
+;; put the given k-v entry into the cache, overwriting
+;; any existing value and refreshing the ttl
+(define/contract (expiring-cache-put cache k v)
+  (-> expiring-cache? any/c any/c void?)
   (call-with-semaphore
    (expiring-cache-entries-lock cache)
-   (lambda ()
+   (λ ()
+     (define entries (expiring-cache-entries cache))
+     (define now ((expiring-cache-timestamp-getter cache)))
+     (hash-set! entries k (cons now v)))))
+
+;; get the cached entry for k, computing it using `compute` if not present.
+;; if k is already in cache, its expiration timer is refreshed.
+(define/contract (expiring-cache-get cache k
+                                     [compute-value (λ (_) (error "Missing key"))])
+  (-> expiring-cache? any/c (-> any/c any/c) any/c)
+  (call-with-semaphore
+   (expiring-cache-entries-lock cache)
+   (λ ()
      (define entries (expiring-cache-entries cache))
      (if (hash-has-key? entries k)
          ;; bump the ttl
          (let ()
            (hash-update! entries k
-                         (lambda (old)
+                         (λ (old)
                            (define now ((expiring-cache-timestamp-getter cache)))
                            (cons now (cdr old))))
            (cdr (hash-ref entries k)))
          ;; compute the value
-         (let* ([value ((expiring-cache-compute-value cache) k)]
+         (let* ([value (compute-value k)]
                 ;; compute timestamp after the value since computing the value could
                 ;; take a long time (network IO, etc.)
                 [now ((expiring-cache-timestamp-getter cache))])
@@ -92,17 +103,16 @@
 
     (define cache (make-expiring-cache
                    (lambda () (unbox fake-current-timestamp))
-                   compute-value
                    ttl))
     ;; technically we're accessing this without taking the lock,
     ;; but the test is single threaded so whatever.
     (define entries (expiring-cache-entries cache))
 
-    (check-eqv? 1 (expiring-cache-get cache 0))
+    (check-eqv? 1 (expiring-cache-get cache 0 compute-value))
     (check-eqv? 1 (unbox times-compute-value-called))
 
     (set-box! fake-current-timestamp 1)
-    (check-eqv? 2 (expiring-cache-get cache 1))
+    (check-eqv? 2 (expiring-cache-get cache 1 compute-value))
     (check-eqv? 2 (unbox times-compute-value-called))
 
     (check-true (hash-has-key? entries 0) "Key 0 should still be cached")
@@ -125,16 +135,15 @@
 
     (define cache (make-expiring-cache
                    (lambda () (unbox fake-current-timestamp))
-                   compute-value
                    ttl))
 
     ;; Fetch key 0 and populate the cache
-    (check-eqv? 1 (expiring-cache-get cache 0))
+    (check-eqv? 1 (expiring-cache-get cache 0 compute-value))
     (check-eqv? 1 (unbox times-compute-value-called))
 
     ;; Advance one time unit and fetch it again, this should hit in cache, but update the ttl
     (set-box! fake-current-timestamp (add1 (unbox fake-current-timestamp)))
-    (check-eqv? 1 (expiring-cache-get cache 0))
+    (check-eqv? 1 (expiring-cache-get cache 0 compute-value))
     (check-eqv? 1 (unbox times-compute-value-called) "Should have hit in cache")
 
     ;; Advance to when key *would have* been purged if we hadn't touched it a second time

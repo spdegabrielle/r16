@@ -183,7 +183,6 @@
     (define emote-image-cache
       (make-expiring-cache
        current-inexact-monotonic-milliseconds
-       get-emote-image
        (* 10 60 1000))) ;; 10 min as ms
     (thread-loop
      (sleep 30)
@@ -217,7 +216,7 @@
         ;; This is to prevent tricks from abusing the bot to download unrelated emotes
         ;; from other servers it's not in.
         (and (set-member? (unbox known-emotes) id)
-             (let ([data (expiring-cache-get emote-image-cache id)])
+             (let ([data (expiring-cache-get emote-image-cache id get-emote-image)])
                (and (positive? (bytes-length data))
                     data))))
 
