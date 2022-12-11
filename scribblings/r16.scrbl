@@ -2,7 +2,7 @@
 
 @(require (for-label racket/base (only-in racket/math natural?) racket/contract))
 
-@title{R16 -- Community-Driven Interactive Code Evaluation}
+@title{R16 — Community-Driven Interactive Code Evaluation}
 
 R16 is a "trick bot". It saves snippets of code, which can then be recalled and executed on user-provided input.
 
@@ -93,6 +93,8 @@ The @tt{frontend} object in the configuration file can have the following keys a
 @item{@tt{bot_token} must be a string containing your Discord bot token.}
 @item{@tt{bot_prefix} is a string specifying the bot's trigger prefix. If not present, defaults to @code{"!rkt "}.}
 @item{@tt{trick_prefix} is a string specifying the bot's shorthand prefix. If not present, defaults to @code{"!!"}.}
+@item{@tt{delete_time} is a nonnegative integer specifying a time in seconds. If any invocation of R16 is deleted within this time, then R16 will also delete its response.
+This helps with spam due to incorrect trick invocations. If not present, defaults to 5 minutes (300 seconds). Set to 0 to disable this feature.}
 ]
 
 @subsection{Discord Trick Environment Extensions}

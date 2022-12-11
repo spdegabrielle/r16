@@ -9,7 +9,7 @@
  (only-in racket/function const curry identity negate thunk)
  racket/list
  racket/match
- (only-in racket/math exact-ceiling)
+ (only-in racket/math exact-ceiling nonnegative-integer?)
  (only-in racket/port port->bytes with-input-from-string with-output-to-string)
  racket/set
  racket/string
@@ -86,6 +86,7 @@
     (init-field client)
     (init-field bot-prefix)
     (init-field trick-prefix)
+    (init-field delete-time-sec)
 
     (define with-typing-indicator ;; (_ proc)
       (let ()
@@ -192,16 +193,17 @@
     (define recent-messages-cache
       (make-expiring-cache
        current-inexact-monotonic-milliseconds
-       (* 5 60 1000))) ;; 5 min as ms
+       (* delete-time-sec 1000)))
 
     (thread-loop
      (sleep 30)
      (let ([purged (length (expiring-cache-purge emote-image-cache))])
        (when (> purged 0)
          (log-r16-debug "Purged ~a emote image bytestrings" purged)))
-     (let ([purged (length (expiring-cache-purge recent-messages-cache))])
-       (when (> purged 0)
-         (log-r16-debug "Purged ~a recent messages" purged))))
+     (when (> delete-time-sec 0)
+       (let ([purged (length (expiring-cache-purge recent-messages-cache))])
+         (when (> purged 0)
+           (log-r16-debug "Purged ~a recent messages" purged)))))
 
     (define/public (get-enrich-context)
       (define deleted-box (current-deleted-box))
@@ -414,7 +416,7 @@
                channel
                (and not-deleted message)
                contents))
-            (when (and not-deleted response)
+            (when (and response not-deleted (> delete-time-sec 0))
               (define response-id (hash-ref response 'id))
               (expiring-cache-put recent-messages-cache
                                   (hash-ref message 'id)
@@ -672,6 +674,7 @@
   (define token (hash-ref config 'bot_token))
   (define bot-prefix (hash-ref config 'bot_prefix "!rkt "))
   (define trick-prefix (hash-ref config 'trick_prefix "!!"))
+  (define delete-time-sec (hash-ref config 'delete_time 300))
   (define client
     (rc:make-client
      token
@@ -680,4 +683,5 @@
   (new discord-frontend%
        [client client]
        [bot-prefix bot-prefix]
-       [trick-prefix trick-prefix]))
+       [trick-prefix trick-prefix]
+       [delete-time-sec delete-time-sec]))
