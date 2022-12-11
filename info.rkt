@@ -6,6 +6,7 @@
                "racket-cord"
                "sandbox-lib"
                "slideshow-lib"
+               "srfi-lite-lib"
                "threading-lib"
                "web-server-lib"))
 (define build-deps '("racket-doc"
@@ -16,3 +17,4 @@
 (define compile-omit-paths '("presentation"))
 (define test-omit-paths '("presentation"))
 (define scribblings '(("scribblings/r16.scrbl" ())))
+(define license 'MIT)
